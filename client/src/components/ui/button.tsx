@@ -1,11 +1,12 @@
 import * as React from "react"
 import { Slot } from "@radix-ui/react-slot"
 import { cva, type VariantProps } from "class-variance-authority"
+import { motion } from "framer-motion"
 
 import { cn } from "@/lib/utils"
 
 const buttonVariants = cva(
-  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0",
+  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0 transition-all duration-300 ease-out",
   {
     variants: {
       variant: {
@@ -37,11 +38,32 @@ export interface ButtonProps
   extends React.ButtonHTMLAttributes<HTMLButtonElement>,
     VariantProps<typeof buttonVariants> {
   asChild?: boolean
+  animated?: boolean // New prop to enable/disable animations
 }
 
 const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
-  ({ className, variant, size, asChild = false, ...props }, ref) => {
+  ({ className, variant, size, asChild = false, animated = true, ...props }, ref) => {
     const Comp = asChild ? Slot : "button"
+    
+    // If animated, wrap with motion for smooth hover/tap effects
+    if (animated && !asChild) {
+      return (
+        <motion.button
+          className={cn(buttonVariants({ variant, size, className }))}
+          ref={ref}
+          whileHover={{
+            scale: 1.05,
+            transition: { duration: 0.2, ease: [0.4, 0, 0.2, 1] }
+          }}
+          whileTap={{
+            scale: 0.95,
+            transition: { duration: 0.1 }
+          }}
+          {...(props as any)}
+        />
+      )
+    }
+    
     return (
       <Comp
         className={cn(buttonVariants({ variant, size, className }))}

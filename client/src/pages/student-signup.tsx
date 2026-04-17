@@ -1,11 +1,13 @@
-import { useEffect, useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/lib/auth";
 import { useLocation } from "wouter";
+import { useToast } from "@/hooks/use-toast";
 
 export default function StudentSignupWizard() {
   const { setRole } = useAuth();
   const [, navigate] = useLocation();
+  const { toast } = useToast();
   // Single page form
   const [submitting, setSubmitting] = useState(false);
   const [form, setForm] = useState({
@@ -24,6 +26,47 @@ export default function StudentSignupWizard() {
   const [usernameStatus, setUsernameStatus] = useState<"unknown" | "checking" | "available" | "taken">("unknown");
   const [otpSent, setOtpSent] = useState(false);
   const [otpCode, setOtpCode] = useState("");
+  const [otpStatus, setOtpStatus] = useState<'valid' | 'invalid' | 'pending'>('pending');
+  const isValidGmail = (email: string) => /^[a-zA-Z0-9._%+-]+@gmail\.com$/i.test(email.trim());
+  
+  // Validate OTP in real-time when 6 digits are entered
+  useEffect(() => {
+    const sanitized = otpCode.replace(/\D/g, '');
+    if (sanitized.length === 6) {
+      const verifyOtp = async () => {
+        try {
+          const res = await fetch('/api/otp/verify', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email: form.email, code: sanitized })
+          }).then(r => r.json());
+          setOtpStatus(res.ok ? 'valid' : 'invalid');
+        } catch {
+          setOtpStatus('invalid');
+        }
+      };
+      verifyOtp();
+    } else {
+      setOtpStatus('pending');
+    }
+  }, [otpCode, form.email]);
+  
+  const isFormComplete = () => {
+    return (
+      form.name.trim() &&
+      isValidGmail(form.email) &&
+      form.id.trim() &&
+      form.username.trim() &&
+      usernameStatus === 'available' &&
+      form.schoolId.trim() &&
+      form.rollNumber.trim() &&
+      form.className.trim() &&
+      form.section.trim() &&
+      form.password && form.password.length >= 6 &&
+      form.confirmPassword === form.password &&
+      otpCode.replace(/\D/g, '').length === 6
+    );
+  };
 
   async function checkUsername() {
     if (!form.username) return;
@@ -37,43 +80,68 @@ export default function StudentSignupWizard() {
   }
 
   async function requestOtp() {
-    if (!form.email) return;
-    await fetch('/api/otp/request', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: form.email }) });
-    setOtpSent(true);
+    if (!isValidGmail(form.email)) {
+      toast({
+        title: 'Invalid Email',
+        description: 'Please enter a valid Gmail address ending with @gmail.com.',
+        variant: 'destructive',
+      });
+      return;
+    }
+    try {
+      const res = await fetch('/api/otp/request', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: form.email }) });
+      const data = await res.json();
+      if (data.ok) {
+        toast({
+          title: 'OTP Sent',
+          description: `OTP code sent to ${form.email}. Check your inbox.`,
+        });
+        setOtpSent(true);
+      } else {
+        toast({
+          title: 'Error',
+          description: 'Failed to send OTP. Please try again.',
+          variant: 'destructive',
+        });
+      }
+    } catch (err) {
+      toast({
+        title: 'Error',
+        description: 'Failed to send OTP. Please try again.',
+        variant: 'destructive',
+      });
+    }
   }
 
   const submit = async () => {
+    // Validate all required fields
+    const missingFields: string[] = [];
+    if (!form.name.trim()) missingFields.push('Full Name');
+    if (!isValidGmail(form.email)) missingFields.push('Valid Gmail Email');
+    if (!form.id.trim()) missingFields.push('Student ID');
+    if (!form.username.trim()) missingFields.push('Username');
+    if (usernameStatus !== 'available') missingFields.push('Available Username (click Check Username)');
+    if (!form.schoolId.trim()) missingFields.push('School/College Name');
+    if (!form.rollNumber.trim()) missingFields.push('Roll Number');
+    if (!form.className.trim()) missingFields.push('Class/Year');
+    if (!form.section.trim()) missingFields.push('Section');
+    if (!form.password || form.password.length < 6) missingFields.push('Password (minimum 6 characters)');
+    if (form.password !== form.confirmPassword) missingFields.push('Password Confirmation (must match password)');
+    
     const sanitized = otpCode.replace(/\D/g, '').slice(0, 6);
-    if (sanitized.length !== 6) {
-      alert('Please enter the 6-digit OTP sent to your email.');
+    if (sanitized.length !== 6 || otpStatus !== 'valid') missingFields.push('Valid 6-digit OTP Code');
+    
+    if (missingFields.length > 0) {
+      toast({
+        title: 'Incomplete Form',
+        description: `Please fill in: ${missingFields.slice(0, 3).join(', ')}${missingFields.length > 3 ? ` and ${missingFields.length - 3} more` : ''}`,
+        variant: 'destructive',
+      });
       return;
     }
-    if (!form.password || form.password.length < 6) {
-      alert('Please set a password with at least 6 characters.');
-      return;
-    }
-    if (form.password !== form.confirmPassword) {
-      alert('Passwords do not match.');
-      return;
-    }
-    // Ensure username is available before submitting
-    try {
-      const avail = await fetch(`/api/username-available/${encodeURIComponent(form.username)}`).then(r => r.json());
-      if (!avail.available) {
-        alert('Username is taken. Please choose another.');
-        return;
-      }
-    } catch {}
 
     setSubmitting(true);
-    // Verify OTP first
-  const verify = await fetch('/api/otp/verify', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: form.email, code: sanitized }) }).then(r => r.json());
-  if (!verify.ok) {
-      setSubmitting(false);
-      alert('Invalid OTP. Please try again.');
-      return;
-    }
-
+    // OTP is already verified in real-time, so we can proceed directly to signup
     await fetch('/api/signup/student', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -87,12 +155,15 @@ export default function StudentSignupWizard() {
         className: form.className,
         section: form.section,
         photoDataUrl: form.photoDataUrl,
-  password: form.password,
+        password: form.password,
       })
     });
     setSubmitting(false);
-    alert('Application submitted. Please wait for admin approval. You can sign in after approval.');
-    navigate('/signin');
+    toast({
+      title: 'Application Submitted',
+      description: 'Your application has been submitted successfully. Please wait for admin approval.',
+    });
+    setTimeout(() => navigate('/signin'), 2000);
   };
 
   return (
@@ -167,10 +238,12 @@ export default function StudentSignupWizard() {
                     value={form.email}
                     onChange={(e) => setForm({ ...form, email: e.target.value })}
                     placeholder="Enter your email"
+                    pattern="^[a-zA-Z0-9._%+-]+@gmail\.com$"
+                    title="Please use a Gmail address ending with @gmail.com"
                     disabled={otpSent}
                     className="w-full px-4 py-3 rounded-xl border-2 border-gray-200 focus:border-green-400 focus:ring-4 focus:ring-green-200 outline-none transition-all duration-300 bg-white disabled:opacity-50"
                   />
-                  <p className="text-sm text-gray-500 mt-1">OTP will be sent to this email</p>
+                  <p className="text-sm text-gray-500 mt-1">Only Gmail is allowed (must end with @gmail.com). OTP will be sent to this email.</p>
                 </div>
                 <div>
                   <label className="block text-gray-700 font-semibold mb-2">Student ID</label>
@@ -197,8 +270,14 @@ export default function StudentSignupWizard() {
               <div className="space-y-4">
                 <div>
                   <label className="block text-gray-700 font-semibold mb-2">School / College</label>
-                  <SchoolPicker value={form.schoolId} onChange={(v) => setForm({ ...form, schoolId: v })} />
-                  <p className="text-sm text-gray-500 mt-1">Don't see yours? Ask admin to add your school/college.</p>
+                  <input
+                    type="text"
+                    value={form.schoolId}
+                    onChange={(e) => setForm({ ...form, schoolId: e.target.value })}
+                    placeholder="Enter your school/college name"
+                    className="w-full px-4 py-3 rounded-xl border-2 border-gray-200 focus:border-green-400 focus:ring-4 focus:ring-green-200 outline-none transition-all duration-300 bg-white"
+                  />
+                  <p className="text-sm text-gray-500 mt-1">Type your school or college name.</p>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <div>
@@ -355,20 +434,33 @@ export default function StudentSignupWizard() {
                   <Button
                     variant="outline"
                     onClick={requestOtp}
-                    disabled={!form.email || otpSent}
+                    disabled={!isValidGmail(form.email) || otpSent}
                     className="px-6 py-3 border-2 border-gray-300 hover:border-green-400 hover:bg-green-50 transition-all duration-300 disabled:opacity-50"
                   >
                     {otpSent ? 'OTP Sent' : 'Send OTP to Email'}
                   </Button>
                   {otpSent && (
-                    <input
-                      type="text"
-                      placeholder="Enter 6-digit OTP"
-                      value={otpCode}
-                      maxLength={6}
-                      onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                      className="flex-1 px-4 py-3 rounded-xl border-2 border-gray-200 focus:border-green-400 focus:ring-4 focus:ring-green-200 outline-none transition-all duration-300 bg-white text-center text-lg font-mono"
-                    />
+                    <div className="flex-1 flex items-center gap-2">
+                      <input
+                        type="text"
+                        placeholder="Enter 6-digit OTP"
+                        value={otpCode}
+                        maxLength={6}
+                        onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                        className="flex-1 px-4 py-3 rounded-xl border-2 border-gray-200 focus:border-green-400 focus:ring-4 focus:ring-green-200 outline-none transition-all duration-300 bg-white text-center text-lg font-mono"
+                      />
+                      {otpCode.replace(/\D/g, '').length === 6 && (
+                        otpStatus === 'valid' ? (
+                          <svg className="w-6 h-6 text-green-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                          </svg>
+                        ) : (
+                          <svg className="w-6 h-6 text-red-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M6 18L18 6M6 6l12 12" />
+                          </svg>
+                        )
+                      )}
+                    </div>
                   )}
                 </div>
                 {otpSent && (
@@ -383,7 +475,7 @@ export default function StudentSignupWizard() {
             <div className="bg-gradient-to-r from-green-500 to-emerald-600 rounded-2xl p-6 text-white">
               <Button
                 onClick={submit}
-                disabled={submitting || usernameStatus === 'taken' || !otpCode}
+                disabled={submitting}
                 className="w-full py-4 bg-white text-green-600 hover:bg-gray-50 font-bold rounded-xl shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed text-lg"
               >
                 {submitting ? (
@@ -436,29 +528,3 @@ function PhotoInput({ label, value, onChange }: { label: string; value: string; 
     </label>
   );
 }
-
-const SchoolPicker = ({ value, onChange }: { value: string; onChange: (v: string) => void }) => {
-  const [schools, setSchools] = useState<Array<{ id: string; name: string }>>([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    let mounted = true;
-    setLoading(true);
-    fetch('/api/schools')
-      .then(r => r.json())
-      .then(data => { if (mounted) setSchools(data || []); })
-      .catch(() => { if (mounted) setError('Failed to load schools'); })
-      .finally(() => { if (mounted) setLoading(false); });
-    return () => { mounted = false; };
-  }, []);
-
-  return (
-    <select className="w-full px-4 py-3 rounded-xl border-2 border-gray-200 focus:border-green-400 focus:ring-4 focus:ring-green-200 outline-none transition-all duration-300 bg-white" value={value} onChange={(e) => onChange(e.target.value)}>
-      <option value="" className="text-gray-900">{loading ? 'Loading…' : error ? 'Failed to load' : 'Select school…'}</option>
-      {schools.map((s) => (
-        <option key={s.id} value={s.id} className="text-gray-900">{s.name}</option>
-      ))}
-    </select>
-  );
-};

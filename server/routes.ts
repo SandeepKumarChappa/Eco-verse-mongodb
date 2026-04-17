@@ -1,9 +1,97 @@
 import express, { type Express } from "express";
 import { createServer, type Server } from "http";
 import path from "path";
+import { randomBytes } from "crypto";
 import { storage, type StudentApplication, type TeacherApplication } from "./storage";
+import { sendEmail, sendWelcomeEmail, sendApplicationStatusEmail } from "./email";
+import { GoogleGenerativeAI } from "@google/generative-ai";
 
 export async function registerRoutes(app: Express): Promise<Server> {
+  type SessionRole = 'student' | 'teacher' | 'admin';
+  type SessionRecord = {
+    sid: string;
+    username: string;
+    role: SessionRole;
+    createdAt: number;
+    lastActivityAt: number;
+  };
+
+  const SESSION_COOKIE = 'ev_session';
+  const SESSION_IDLE_TIMEOUT_MS = 30 * 60 * 1000; // 30 minutes
+  const SESSION_ABSOLUTE_TIMEOUT_MS = 8 * 60 * 60 * 1000; // 8 hours
+  const sessions = new Map<string, SessionRecord>();
+
+  const parseCookies = (cookieHeader?: string) => {
+    const out: Record<string, string> = {};
+    if (!cookieHeader) return out;
+    for (const item of cookieHeader.split(';')) {
+      const [rawKey, ...rest] = item.trim().split('=');
+      if (!rawKey) continue;
+      out[rawKey] = decodeURIComponent(rest.join('=') || '');
+    }
+    return out;
+  };
+
+  const setSessionCookie = (res: any, sid: string) => {
+    res.cookie(SESSION_COOKIE, sid, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      path: '/',
+      maxAge: SESSION_ABSOLUTE_TIMEOUT_MS,
+    });
+  };
+
+  const clearSessionCookie = (res: any) => {
+    res.clearCookie(SESSION_COOKIE, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      path: '/',
+    });
+  };
+
+  const getActiveSession = (req: any, res?: any) => {
+    const cookies = parseCookies(req.headers.cookie as string | undefined);
+    const sid = cookies[SESSION_COOKIE];
+    if (!sid) return null;
+    const session = sessions.get(sid);
+    if (!session) {
+      if (res) clearSessionCookie(res);
+      return null;
+    }
+
+    const now = Date.now();
+    const idleExpired = now - session.lastActivityAt > SESSION_IDLE_TIMEOUT_MS;
+    const absoluteExpired = now - session.createdAt > SESSION_ABSOLUTE_TIMEOUT_MS;
+    if (idleExpired || absoluteExpired) {
+      sessions.delete(sid);
+      if (res) clearSessionCookie(res);
+      return null;
+    }
+
+    session.lastActivityAt = now;
+    sessions.set(sid, session);
+    return session;
+  };
+
+  const protectedPrefixes = ['/api/me', '/api/student', '/api/teacher', '/api/admin', '/api/learning'];
+  app.use((req, res, next) => {
+    if (!req.path.startsWith('/api/')) return next();
+
+    const needsSession = protectedPrefixes.some(prefix => req.path.startsWith(prefix));
+    if (!needsSession) return next();
+
+    const session = getActiveSession(req, res);
+    if (!session) {
+      return res.status(401).json({ error: 'Session expired. Please sign in again.' });
+    }
+
+    req.headers['x-username'] = session.username;
+    req.headers['x-role'] = session.role;
+    next();
+  });
+
   // Serve all assets under public/models (textures, bins, nested folders) so GLB dependencies resolve
   const modelsRoot = path.join(process.cwd(), 'public', 'models');
   app.use('/api/models', express.static(modelsRoot));
@@ -43,6 +131,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
     });
   });
+
+  // Serve embedded static games under a dedicated path to avoid colliding with SPA /games route
+  const gamesRoot = path.join(process.cwd(), 'public', 'games');
+  app.use('/embedded-games', express.static(gamesRoot));
 
   // Health check endpoint
   app.get('/api/health', (req, res) => {
@@ -195,8 +287,65 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const roles = (storage as any).roles as Map<string, 'student'|'teacher'|'admin'>;
     const found = Array.from(users?.values?.() ?? []).find((u) => u.username === username && u.password === password);
     if (!found) return res.status(401).json({ ok: false });
-    const role = roles?.get(found.id) ?? 'student';
-    res.json({ ok: true, role, username: found.username });
+    const role = (roles?.get(found.id) ?? 'student') as SessionRole;
+
+    // Invalidate any existing session from this browser before issuing a new one.
+    const existing = parseCookies(req.headers.cookie as string | undefined)[SESSION_COOKIE];
+    if (existing) sessions.delete(existing);
+
+    const sid = randomBytes(32).toString('hex');
+    const now = Date.now();
+    sessions.set(sid, {
+      sid,
+      username: found.username,
+      role,
+      createdAt: now,
+      lastActivityAt: now,
+    });
+    setSessionCookie(res, sid);
+
+    res.json({
+      ok: true,
+      role,
+      username: found.username,
+      idleTimeoutMs: SESSION_IDLE_TIMEOUT_MS,
+      absoluteTimeoutMs: SESSION_ABSOLUTE_TIMEOUT_MS,
+    });
+  });
+
+  app.post('/api/logout', async (req, res) => {
+    const sid = parseCookies(req.headers.cookie as string | undefined)[SESSION_COOKIE];
+    if (sid) sessions.delete(sid);
+    clearSessionCookie(res);
+    res.json({ ok: true });
+  });
+
+  app.get('/api/session', async (req, res) => {
+    const session = getActiveSession(req, res);
+    if (!session) return res.status(401).json({ ok: false });
+    const now = Date.now();
+    res.json({
+      ok: true,
+      username: session.username,
+      role: session.role,
+      expiresInMs: Math.min(
+        SESSION_IDLE_TIMEOUT_MS - (now - session.lastActivityAt),
+        SESSION_ABSOLUTE_TIMEOUT_MS - (now - session.createdAt),
+      ),
+    });
+  });
+
+  app.post('/api/session/ping', async (req, res) => {
+    const session = getActiveSession(req, res);
+    if (!session) return res.status(401).json({ ok: false });
+    const now = Date.now();
+    res.json({
+      ok: true,
+      expiresInMs: Math.min(
+        SESSION_IDLE_TIMEOUT_MS - (now - session.lastActivityAt),
+        SESSION_ABSOLUTE_TIMEOUT_MS - (now - session.createdAt),
+      ),
+    });
   });
 
   // Public: application status by username (pending/approved/none)
@@ -213,20 +362,72 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post('/api/otp/request', async (req, res) => {
     const { email } = req.body ?? {};
-    if (!email) return res.status(400).json({ error: 'Email required' });
-    // Generate a simple 6-digit code; in memory only.
+    const normalizedEmail = String(email || '').trim();
+    if (!normalizedEmail) return res.status(400).json({ error: 'Email required' });
+
     const code = Math.floor(100000 + Math.random() * 900000).toString();
-    await storage.saveOtp(email, code, 5 * 60 * 1000);
-    // Simulate sending email by logging to server output.
-    console.log(`[OTP] ${email} -> ${code}`);
-    res.json({ ok: true });
+    await storage.saveOtp(normalizedEmail, code, 5 * 60 * 1000);
+
+    try {
+      await sendEmail({
+        to: normalizedEmail,
+        subject: 'Your OTP Code',
+        text: `Your OTP is: ${code}. It expires in 5 minutes.`,
+        html: `<p>Your OTP is: <strong>${code}</strong>. It expires in 5 minutes.</p>`,
+      });
+      res.json({ ok: true });
+    } catch (err) {
+      console.error('Email send error:', err);
+      res.status(500).json({ error: 'Failed to send OTP email' });
+    }
   });
+  
 
   app.post('/api/otp/verify', async (req, res) => {
     const { email, code } = req.body ?? {};
     if (!email || !code) return res.status(400).json({ error: 'Email and code required' });
     const ok = await storage.verifyOtp(email, code);
     res.json({ ok });
+  });
+
+  app.post('/api/contact', async (req, res) => {
+    const { name, email, category, subject, message } = req.body ?? {};
+    const senderName = String(name || '').trim();
+    const senderEmail = String(email || '').trim();
+    const contactCategory = String(category || '').trim();
+    const contactSubject = String(subject || '').trim();
+    const contactMessage = String(message || '').trim();
+
+    if (!senderName || !senderEmail || !contactCategory || !contactSubject || !contactMessage) {
+      return res.status(400).json({ error: 'All contact fields are required' });
+    }
+
+    const supportInbox = process.env.EMAIL || process.env.GMAIL_USER || process.env.SUPPORT_EMAIL || 'ecoverse.academy@gmail.com';
+
+    await sendEmail({
+      to: supportInbox,
+      subject: `[Contact:${contactCategory}] ${contactSubject}`,
+      text: `Name: ${senderName}\nEmail: ${senderEmail}\nCategory: ${contactCategory}\nSubject: ${contactSubject}\n\nMessage:\n${contactMessage}`,
+      replyTo: senderEmail,
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 680px; margin: 0 auto; color: #111827;">
+          <div style="background: linear-gradient(135deg, #0f766e 0%, #16a34a 100%); color: white; padding: 20px 24px; border-radius: 14px 14px 0 0;">
+            <h1 style="margin: 0; font-size: 22px;">EcoVerse Contact Request</h1>
+          </div>
+          <div style="background: #ffffff; padding: 24px; border: 1px solid #e5e7eb; border-top: none; border-radius: 0 0 14px 14px;">
+            <p><strong>Name:</strong> ${senderName}</p>
+            <p><strong>Email:</strong> ${senderEmail}</p>
+            <p><strong>Category:</strong> ${contactCategory}</p>
+            <p><strong>Subject:</strong> ${contactSubject}</p>
+            <div style="margin-top: 18px; padding: 16px; background: #f9fafb; border-radius: 12px; white-space: pre-wrap;">
+              ${contactMessage}
+            </div>
+          </div>
+        </div>
+      `,
+    });
+
+    res.json({ ok: true, deliveredTo: supportInbox });
   });
 
   // ===== Self Profile (Teacher/Student/Admin) =====
@@ -711,6 +912,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json({ ok: true });
   });
 
+  // ===== Learning modules =====
+  app.get('/api/learning/progress', async (req, res) => {
+    const current = (req.headers['x-username'] as string) || '';
+    if (!current) return res.status(401).json({ error: 'Missing username' });
+    const list = await (storage as any).listLessonCompletions(current);
+    const totalLessonPoints = list.reduce((acc: number, lc: any) => acc + Number(lc.points || 0), 0);
+    res.json({ completions: list, totalLessonPoints });
+  });
+
+  app.post('/api/learning/complete', async (req, res) => {
+    const current = (req.headers['x-username'] as string) || '';
+    if (!current) return res.status(401).json({ error: 'Missing username' });
+    const { moduleId, moduleTitle, lessonId, lessonTitle, points } = req.body ?? {};
+    const r = await (storage as any).completeLesson(current, { moduleId, moduleTitle, lessonId, lessonTitle, points });
+    if (!r.ok) return res.status(400).json({ error: r.error });
+    res.json(r);
+  });
+
   // ===== Activity logging =====
   app.post('/api/student/quiz-attempts', async (req, res) => {
     const current = (req.headers['x-username'] as string) || '';
@@ -1016,6 +1235,83 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error('Error deleting teacher video:', error);
       res.status(500).json({ error: 'Failed to delete video' });
+    }
+  });
+
+  // ===== Public Profile Endpoint (no auth required) =====
+  app.get('/api/public-profile/:username', async (req, res) => {
+    const { username } = req.params;
+    if (!username) return res.status(400).json({ error: 'Missing username' });
+    
+    try {
+      const profile = await (storage as any).getStudentProfile(username);
+      if (!profile) return res.status(404).json({ error: 'Profile not found' });
+      
+      // Check if student allows external view
+      if (!profile.allowExternalView) {
+        return res.status(403).json({ error: 'This profile is private' });
+      }
+      
+      // Return public profile data (including eco points)
+      res.json({
+        username: profile.username,
+        name: profile.name,
+        ecoPoints: profile.ecoPoints,
+        ecoTreeStage: profile.ecoTreeStage,
+        achievements: profile.achievements,
+        ranks: profile.ranks,
+        timeline: profile.timeline,
+        schoolId: profile.schoolId
+      });
+    } catch (error) {
+      console.error('Error fetching public profile:', error);
+      res.status(500).json({ error: 'Failed to fetch profile' });
+    }
+  });
+
+  // Email endpoints
+  app.post('/api/email/welcome', async (req, res) => {
+    try {
+      const { email, name } = req.body;
+      if (!email || !name) {
+        return res.status(400).json({ error: 'Missing email or name' });
+      }
+      await sendWelcomeEmail(email, name);
+      res.json({ ok: true, message: 'Welcome email sent' });
+    } catch (error: any) {
+      console.error('Error sending welcome email:', error);
+      res.status(500).json({ error: error.message || 'Failed to send email' });
+    }
+  });
+
+  app.post('/api/email/application-status', async (req, res) => {
+    try {
+      const { email, name, status, message } = req.body;
+      if (!email || !name || !status) {
+        return res.status(400).json({ error: 'Missing required fields' });
+      }
+      if (!['approved', 'rejected', 'pending'].includes(status)) {
+        return res.status(400).json({ error: 'Invalid status' });
+      }
+      await sendApplicationStatusEmail(email, name, status, message);
+      res.json({ ok: true, message: 'Application status email sent' });
+    } catch (error: any) {
+      console.error('Error sending application status email:', error);
+      res.status(500).json({ error: error.message || 'Failed to send email' });
+    }
+  });
+
+  app.post('/api/email/custom', async (req, res) => {
+    try {
+      const { to, subject, html, text } = req.body;
+      if (!to || !subject || !html) {
+        return res.status(400).json({ error: 'Missing required fields (to, subject, html)' });
+      }
+      await sendEmail({ to, subject, html, text });
+      res.json({ ok: true, message: 'Email sent' });
+    } catch (error: any) {
+      console.error('Error sending custom email:', error);
+      res.status(500).json({ error: error.message || 'Failed to send email' });
     }
   });
 

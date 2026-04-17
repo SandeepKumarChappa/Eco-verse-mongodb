@@ -2,31 +2,28 @@ import { useEffect, useState } from "react";
 import { useRoute } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Trophy, GamepadIcon, BookOpen, Target, Award, CheckCircle2, TrendingUp, ArrowLeft } from "lucide-react";
+import { Trophy, BookOpen, Target, Award, CheckCircle2, TrendingUp, ArrowLeft, Lock, Zap, Copy } from "lucide-react";
 import { Link } from "wouter";
+import { motion } from "framer-motion";
+
+interface TimelineItem {
+  kind: string;
+  when: number;
+  title: string;
+  photoDataUrl?: string;
+  points?: number;
+  scorePercent?: number;
+}
 
 interface PublicProfileData {
   username: string;
-  achievements: number;
-  gamesCompleted: number;
-  tasksCompleted: number;
-  quizzesCompleted: number;
-  assignmentsSubmitted: number;
-  videosWatched: number;
-  recentAchievements: Array<{
-    title: string;
-    description: string;
-    icon: string;
-    time: string;
-  }>;
-  activityStreak: number;
-  monthlyProgress: {
-    tasks: { completed: number; total: number; };
-    games: { completed: number; total: number; };
-    quizzes: { completed: number; total: number; };
-    assignments: { completed: number; total: number; };
-    videos: { completed: number; total: number; };
-  };
+  name: string;
+  ecoPoints: number;
+  ecoTreeStage: string;
+  achievements: Array<{ key: string; name: string; unlocked: boolean }>;
+  ranks: { global: number | null; school: number | null };
+  timeline: TimelineItem[];
+  schoolId?: string;
 }
 
 export default function PublicProfilePage() {
@@ -35,44 +32,37 @@ export default function PublicProfilePage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
-  console.log("PublicProfilePage - params:", params);
-
   useEffect(() => {
-    console.log("PublicProfilePage useEffect - params:", params);
     if (params?.profileId) {
       try {
         // Decode the profile ID to get username
         const username = atob(params.profileId);
-        console.log("Decoded username:", username);
         
-        // Mock data - in a real app this would come from an API
-        const mockData: PublicProfileData = {
-          username: username,
-          achievements: 12,
-          gamesCompleted: 8,
-          tasksCompleted: 15,
-          quizzesCompleted: 6,
-          assignmentsSubmitted: 4,
-          videosWatched: 12,
-          recentAchievements: [
-            { title: "Eco Warrior", description: "Completed 10 environmental tasks", icon: "🌱", time: "2 days ago" },
-            { title: "Quiz Master", description: "Perfect score on Climate Change quiz", icon: "🧠", time: "3 days ago" },
-            { title: "Assignment Ace", description: "Submitted Water Conservation project", icon: "📋", time: "5 days ago" },
-            { title: "Waste Master", description: "Perfect score in waste segregation game", icon: "♻️", time: "1 week ago" },
-            { title: "Energy Saver", description: "Completed energy conservation quiz", icon: "⚡", time: "2 weeks ago" },
-          ],
-          activityStreak: 7,
-          monthlyProgress: {
-            tasks: { completed: 15, total: 20 },
-            games: { completed: 8, total: 12 },
-            quizzes: { completed: 6, total: 10 },
-            assignments: { completed: 4, total: 6 },
-            videos: { completed: 12, total: 18 }
+        // Fetch real profile data from API
+        (async () => {
+          try {
+            const response = await fetch(`/api/public-profile/${username}`);
+            
+            if (!response.ok) {
+              if (response.status === 404) {
+                setError("Profile not found");
+              } else if (response.status === 403) {
+                setError("This profile is private");
+              } else {
+                setError(await response.json().then(d => d.error).catch(() => "Failed to load profile"));
+              }
+              setLoading(false);
+              return;
+            }
+            
+            const data = await response.json();
+            setProfileData(data);
+            setLoading(false);
+          } catch (err) {
+            setError("Failed to load profile");
+            setLoading(false);
           }
-        };
-        
-        setProfileData(mockData);
-        setLoading(false);
+        })();
       } catch (err) {
         setError("Invalid profile ID");
         setLoading(false);
@@ -93,251 +83,286 @@ export default function PublicProfilePage() {
 
   if (error || !profileData) {
     return (
-      <div 
-        className="min-h-screen text-white p-6 flex items-center justify-center"
-        style={{
-          backgroundImage: 'url(/api/image/nature-319.jpg)',
-          backgroundSize: 'cover',
-          backgroundPosition: 'center',
-          backgroundRepeat: 'no-repeat'
-        }}
-      >
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm"></div>
-        <div className="relative z-10 text-center">
-          <h1 className="text-3xl font-bold mb-4">Profile Not Found</h1>
-          <p className="text-white/70 mb-6">{error || "The requested profile could not be found."}</p>
-          <Link href="/">
-            <Button className="bg-white/20 hover:bg-white/30 text-white border-white/30">
-              <ArrowLeft className="w-4 h-4 mr-2" />
-              Go Home
-            </Button>
-          </Link>
+      <div className="min-h-screen relative overflow-hidden text-white px-4 py-6 sm:px-6 lg:px-8 bg-[radial-gradient(circle_at_top_left,_rgba(16,185,129,0.16),_transparent_28%),radial-gradient(circle_at_top_right,_rgba(34,211,238,0.14),_transparent_24%),linear-gradient(160deg,_#08151b_0%,_#071f22_40%,_#030b11_100%)]">
+        <div className="absolute inset-0 overflow-hidden pointer-events-none">
+          <div className="absolute -top-24 left-[-6rem] h-72 w-72 rounded-full bg-emerald-400/10 blur-3xl animate-pulse" />
+          <div className="absolute bottom-0 right-[-5rem] h-80 w-80 rounded-full bg-cyan-400/10 blur-3xl animate-pulse" style={{ animationDelay: '900ms' }} />
+        </div>
+
+        <div className="relative z-10 max-w-4xl mx-auto min-h-[calc(100vh-3rem)] flex items-center">
+          <div className="w-full rounded-3xl border border-white/15 bg-white/8 backdrop-blur-2xl shadow-2xl shadow-black/30 p-6 md:p-10 text-center">
+            <div className="mx-auto h-20 w-20 rounded-3xl bg-white/10 border border-white/10 flex items-center justify-center mb-6 relative overflow-hidden">
+              <motion.div
+                animate={{ scale: [1, 1.08, 1], rotate: [0, -6, 0] }}
+                transition={{ duration: 2.8, repeat: Infinity, repeatDelay: 0.8 }}
+                className="absolute inset-0 bg-amber-400/10"
+              />
+              <Lock className="relative z-10 w-10 h-10 text-amber-300" />
+            </div>
+
+            <Badge className="mb-4 bg-amber-500/15 text-amber-200 border-amber-300/20 px-3 py-1 rounded-full">
+              Private Profile
+            </Badge>
+
+            <h1 className="text-3xl md:text-4xl font-bold text-white mb-3">{error}</h1>
+            <p className="text-white/70 max-w-2xl mx-auto mb-8">
+              {error === "This profile is private"
+                ? "This student has not enabled public visibility yet. Once they switch their profile to Public in the dashboard, the link will load here."
+                : "The profile you opened could not be found or is unavailable right now."}
+            </p>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8 text-left">
+              <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
+                <div className="text-sm text-white/60 mb-1">What happened</div>
+                <div className="font-medium text-white">The profile is currently hidden from public view.</div>
+              </div>
+              <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
+                <div className="text-sm text-white/60 mb-1">How to fix</div>
+                <div className="font-medium text-white">The owner must tap Make Public in their student dashboard.</div>
+              </div>
+              <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
+                <div className="text-sm text-white/60 mb-1">After that</div>
+                <div className="font-medium text-white">Refresh this page or reopen the same link.</div>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-center gap-3 flex-wrap">
+              <Link href="/">
+                <Button className="bg-white/10 hover:bg-white/20 text-white border border-white/15">
+                  <ArrowLeft className="w-4 h-4 mr-2" />
+                  Go Home
+                </Button>
+              </Link>
+              <a href="/student">
+                <Button className="bg-emerald-500 hover:bg-emerald-600 text-white border border-emerald-300/20">
+                  Open Student Dashboard
+                </Button>
+              </a>
+              <Button
+                onClick={async () => {
+                  try {
+                    await navigator.clipboard.writeText(window.location.href);
+                  } catch {
+                    // ignore clipboard failures
+                  }
+                }}
+                className="bg-white/10 hover:bg-white/20 text-white border border-white/15"
+              >
+                <Copy className="w-4 h-4 mr-2" />
+                Copy Link
+              </Button>
+            </div>
+          </div>
         </div>
       </div>
     );
   }
 
+  const tasksCount = profileData.timeline.filter(t => t.kind === 'task').length;
+  const quizzesCount = profileData.timeline.filter(t => t.kind === 'quiz').length;
+  const gamesCount = profileData.timeline.filter(t => t.kind === 'game').length;
+  const unlockedAchievements = profileData.achievements.filter(a => a.unlocked).length;
+
+  const stageEmoji = profileData.ecoTreeStage === 'Big Tree' ? '🌳' : profileData.ecoTreeStage === 'Small Tree' ? '🌲' : '🌱';
+  const scrollToSection = (id: string) => {
+    document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
+
   return (
-    <div 
-      className="min-h-screen text-white p-6"
-      style={{
-        backgroundImage: 'url(/api/image/nature-319.jpg)',
-        backgroundSize: 'cover',
-        backgroundPosition: 'center',
-        backgroundRepeat: 'no-repeat'
-      }}
-    >
-      {/* Overlay for better text visibility */}
-      <div className="fixed inset-0 bg-black/60 backdrop-blur-sm"></div>
-      
-      <div className="relative z-10 max-w-4xl mx-auto">
-        {/* Header */}
-        <div className="bg-white/10 backdrop-blur-xl border border-white/20 shadow-xl rounded-xl p-6 mb-6">
-          <div className="flex items-center justify-between mb-4">
-            <Link href="/">
-              <Button className="bg-white/20 hover:bg-white/30 text-white border-white/30">
-                <ArrowLeft className="w-4 h-4 mr-2" />
-                Back
-              </Button>
-            </Link>
-            <Badge className="bg-blue-500/20 text-blue-200 border-blue-300/30">
-              Public Profile
-            </Badge>
-          </div>
-          
-          <h1 className="text-3xl font-bold text-white/90 mb-2">{profileData.username}'s Profile</h1>
-          <p className="text-white/70">Environmental Learning Progress</p>
+    <div className="min-h-screen relative overflow-hidden text-white px-4 py-6 sm:px-6 lg:px-8 bg-[radial-gradient(circle_at_top_left,_rgba(16,185,129,0.18),_transparent_30%),radial-gradient(circle_at_top_right,_rgba(34,211,238,0.14),_transparent_28%),linear-gradient(160deg,_#08151b_0%,_#052f2a_45%,_#031018_100%)]">
+      <div className="absolute inset-0 overflow-hidden pointer-events-none">
+        <div className="absolute -top-24 left-[-6rem] h-72 w-72 rounded-full bg-emerald-400/10 blur-3xl animate-pulse" />
+        <div className="absolute top-24 right-[-5rem] h-80 w-80 rounded-full bg-cyan-400/10 blur-3xl animate-pulse" style={{ animationDelay: '900ms' }} />
+        <div className="absolute bottom-0 left-1/3 h-64 w-64 rounded-full bg-lime-300/5 blur-3xl animate-pulse" style={{ animationDelay: '1800ms' }} />
+      </div>
+
+      <div className="relative z-10 max-w-6xl mx-auto space-y-6">
+        <div className="flex items-center justify-between gap-4 flex-wrap">
+          <Link href="/">
+            <Button className="bg-white/10 hover:bg-white/20 text-white border border-white/15 backdrop-blur-xl">
+              <ArrowLeft className="w-4 h-4 mr-2" />
+              Back
+            </Button>
+          </Link>
+          <Badge className="bg-emerald-500/15 text-emerald-200 border-emerald-300/20 px-3 py-1 rounded-full">
+            Public Profile
+          </Badge>
         </div>
 
-        {/* Progress Overview */}
-        <div className="bg-white/10 backdrop-blur-xl border border-white/20 shadow-xl rounded-xl p-6 mb-6">
-          <h2 className="text-2xl font-bold text-white/90 mb-6 flex items-center">
-            <TrendingUp className="w-6 h-6 mr-2" />
-            Progress Overview
-          </h2>
-          
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div className="text-center">
-              <div className="bg-gradient-to-br from-green-500/20 to-emerald-600/20 border border-green-400/30 rounded-xl p-6">
-                <Trophy className="w-8 h-8 text-green-400 mx-auto mb-2" />
-                <p className="text-2xl font-bold text-white">{profileData.achievements}</p>
-                <p className="text-green-300 text-sm">Achievements Earned</p>
+        <motion.div
+          initial={{ opacity: 0, y: -24 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.6 }}
+          className="relative overflow-hidden rounded-3xl border border-white/15 bg-white/8 backdrop-blur-2xl shadow-2xl shadow-black/30 p-6 md:p-8"
+        >
+          <div className="absolute inset-0 bg-[linear-gradient(135deg,rgba(16,185,129,0.14),rgba(14,165,233,0.08),rgba(251,191,36,0.08))]" />
+          <div className="relative z-10 grid gap-6 lg:grid-cols-[1.4fr_0.9fr] items-center">
+            <div className="flex items-start gap-5">
+              <div className="h-20 w-20 rounded-2xl bg-gradient-to-br from-emerald-400 via-cyan-400 to-lime-300 shadow-lg shadow-emerald-500/30 flex items-center justify-center text-4xl">
+                {stageEmoji}
               </div>
-            </div>
-            
-            <div className="text-center">
-              <div className="bg-gradient-to-br from-blue-500/20 to-cyan-600/20 border border-blue-400/30 rounded-xl p-6">
-                <GamepadIcon className="w-8 h-8 text-blue-400 mx-auto mb-2" />
-                <p className="text-2xl font-bold text-white">{profileData.gamesCompleted}</p>
-                <p className="text-blue-300 text-sm">Games Completed</p>
-              </div>
-            </div>
-            
-            <div className="text-center">
-              <div className="bg-gradient-to-br from-purple-500/20 to-pink-600/20 border border-purple-400/30 rounded-xl p-6">
-                <BookOpen className="w-8 h-8 text-purple-400 mx-auto mb-2" />
-                <p className="text-2xl font-bold text-white">{profileData.tasksCompleted}</p>
-                <p className="text-purple-300 text-sm">Tasks Completed</p>
-              </div>
-            </div>
-          </div>
-
-          {/* Second Row */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-6">
-            <div className="text-center">
-              <div className="bg-gradient-to-br from-orange-500/20 to-red-600/20 border border-orange-400/30 rounded-xl p-6">
-                <svg className="w-8 h-8 text-orange-400 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-                <p className="text-2xl font-bold text-white">{profileData.quizzesCompleted}</p>
-                <p className="text-orange-300 text-sm">Quizzes Completed</p>
-              </div>
-            </div>
-
-            <div className="text-center">
-              <div className="bg-gradient-to-br from-indigo-500/20 to-purple-600/20 border border-indigo-400/30 rounded-xl p-6">
-                <svg className="w-8 h-8 text-indigo-400 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.746 0 3.332.477 4.5 1.253v13C19.832 18.477 18.246 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
-                </svg>
-                <p className="text-2xl font-bold text-white">{profileData.assignmentsSubmitted}</p>
-                <p className="text-indigo-300 text-sm">Assignments Submitted</p>
-              </div>
-            </div>
-
-            <div className="text-center">
-              <div className="bg-gradient-to-br from-pink-500/20 to-rose-600/20 border border-pink-400/30 rounded-xl p-6">
-                <svg className="w-8 h-8 text-pink-400 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.828 14.828a4 4 0 01-5.656 0M9 10h1m4 0h1m-6 4h1m4 0h1m-6-8h8a2 2 0 012 2v8a2 2 0 01-2 2H8a2 2 0 01-2-2V8a2 2 0 012-2z" />
-                </svg>
-                <p className="text-2xl font-bold text-white">{profileData.videosWatched}</p>
-                <p className="text-pink-300 text-sm">Videos Watched</p>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Recent Achievements */}
-        <div className="bg-white/10 backdrop-blur-xl border border-white/20 shadow-xl rounded-xl p-6 mb-6">
-          <h3 className="text-xl font-bold text-white/90 mb-4 flex items-center">
-            <Award className="w-5 h-5 mr-2" />
-            Recent Achievements
-          </h3>
-          
-          <div className="space-y-3">
-            {profileData.recentAchievements.map((achievement, index) => (
-              <div key={index} className="flex items-center gap-4 p-4 bg-white/5 rounded-lg border border-white/10">
-                <div className="text-2xl">{achievement.icon}</div>
-                <div className="flex-1">
-                  <h4 className="text-white font-medium">{achievement.title}</h4>
-                  <p className="text-white/70 text-sm">{achievement.description}</p>
+              <div className="min-w-0">
+                <div className="flex items-center gap-3 flex-wrap">
+                  <h1 className="text-3xl md:text-4xl font-bold text-white">{profileData.name || profileData.username}</h1>
+                  <Badge className="bg-white/10 text-white/80 border border-white/10">{profileData.ecoTreeStage}</Badge>
                 </div>
-                <div className="text-white/60 text-xs">{achievement.time}</div>
-                <CheckCircle2 className="w-5 h-5 text-green-400" />
+                <p className="text-white/70 mt-1">@{profileData.username}</p>
+                <p className="text-sm text-white/60 mt-3 max-w-2xl">
+                  Public progress snapshot showing eco-points, achievements, and recent contribution history.
+                </p>
               </div>
-            ))}
+            </div>
+
+            <div className="grid grid-cols-3 gap-3">
+              <div className="rounded-2xl border border-white/10 bg-black/20 p-4 text-center">
+                <div className="text-xs uppercase tracking-[0.2em] text-white/50 mb-1">Points</div>
+                <div className="text-2xl font-bold text-emerald-300">{profileData.ecoPoints}</div>
+              </div>
+              <div className="rounded-2xl border border-white/10 bg-black/20 p-4 text-center">
+                <div className="text-xs uppercase tracking-[0.2em] text-white/50 mb-1">Global</div>
+                <div className="text-2xl font-bold text-amber-300">{profileData.ranks.global ? `#${profileData.ranks.global}` : '—'}</div>
+              </div>
+              <div className="rounded-2xl border border-white/10 bg-black/20 p-4 text-center">
+                <div className="text-xs uppercase tracking-[0.2em] text-white/50 mb-1">School</div>
+                <div className="text-2xl font-bold text-cyan-300">{profileData.ranks.school ? `#${profileData.ranks.school}` : '—'}</div>
+              </div>
+            </div>
           </div>
+        </motion.div>
+
+        <div className="flex flex-wrap gap-3">
+          <Button onClick={() => scrollToSection('overview')} className="bg-white/10 hover:bg-white/20 text-white border border-white/10">Overview</Button>
+          <Button onClick={() => scrollToSection('activity')} className="bg-white/10 hover:bg-white/20 text-white border border-white/10">Activity</Button>
+          <Button onClick={() => scrollToSection('achievements')} className="bg-white/10 hover:bg-white/20 text-white border border-white/10">Achievements</Button>
+          <Button onClick={() => scrollToSection('timeline')} className="bg-white/10 hover:bg-white/20 text-white border border-white/10">Timeline</Button>
         </div>
 
-        {/* Progress Details */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div className="bg-white/10 backdrop-blur-xl border border-white/20 shadow-xl rounded-xl p-6">
-            <h3 className="text-xl font-bold text-white/90 mb-4 flex items-center">
-              <Target className="w-5 h-5 mr-2" />
-              Monthly Goals
+        <motion.div
+          id="overview"
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.55, delay: 0.1 }}
+          className="grid grid-cols-1 md:grid-cols-3 gap-4"
+        >
+          <div className="rounded-2xl border border-white/10 bg-white/8 backdrop-blur-xl p-5">
+            <div className="flex items-center gap-2 text-emerald-300 mb-2"><Zap className="w-4 h-4" /> Eco Points</div>
+            <div className="text-3xl font-bold text-white">{profileData.ecoPoints}</div>
+          </div>
+          <div className="rounded-2xl border border-white/10 bg-white/8 backdrop-blur-xl p-5">
+            <div className="flex items-center gap-2 text-amber-300 mb-2"><Trophy className="w-4 h-4" /> Rankings</div>
+            <div className="text-sm text-white/70">Global {profileData.ranks.global ? `#${profileData.ranks.global}` : '—'}</div>
+            <div className="text-sm text-white/70">School {profileData.ranks.school ? `#${profileData.ranks.school}` : '—'}</div>
+          </div>
+          <div className="rounded-2xl border border-white/10 bg-white/8 backdrop-blur-xl p-5">
+            <div className="flex items-center gap-2 text-cyan-300 mb-2"><BookOpen className="w-4 h-4" /> Tree Stage</div>
+            <div className="text-3xl font-bold text-white">{profileData.ecoTreeStage}</div>
+          </div>
+        </motion.div>
+
+        <motion.div
+          id="activity"
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.6, delay: 0.2 }}
+          className="rounded-3xl border border-white/10 bg-white/8 backdrop-blur-xl shadow-2xl p-6"
+        >
+          <div className="flex items-center justify-between gap-4 flex-wrap mb-6">
+            <h2 className="text-2xl font-bold text-white/95 flex items-center gap-2">
+              <TrendingUp className="w-6 h-6 text-emerald-300" /> Activity Summary
+            </h2>
+            <div className="text-sm text-white/60">A quick snapshot of contributions and progress</div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="rounded-2xl border border-white/10 bg-black/20 p-5 hover:border-emerald-300/30 transition-colors">
+              <Trophy className="w-7 h-7 text-emerald-300 mb-3" />
+              <div className="text-3xl font-bold text-white">{unlockedAchievements}</div>
+              <div className="text-emerald-200 text-sm mt-1">Achievements unlocked</div>
+            </div>
+            <div className="rounded-2xl border border-white/10 bg-black/20 p-5 hover:border-cyan-300/30 transition-colors">
+              <BookOpen className="w-7 h-7 text-cyan-300 mb-3" />
+              <div className="text-3xl font-bold text-white">{tasksCount}</div>
+              <div className="text-cyan-200 text-sm mt-1">Tasks completed</div>
+            </div>
+            <div className="rounded-2xl border border-white/10 bg-black/20 p-5 hover:border-amber-300/30 transition-colors">
+              <Target className="w-7 h-7 text-amber-300 mb-3" />
+              <div className="text-3xl font-bold text-white">{quizzesCount}</div>
+              <div className="text-amber-200 text-sm mt-1">Quizzes completed</div>
+            </div>
+          </div>
+        </motion.div>
+
+        {profileData.achievements && profileData.achievements.length > 0 && (
+          <motion.div
+            id="achievements"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6, delay: 0.3 }}
+            className="rounded-3xl border border-white/10 bg-white/8 backdrop-blur-xl shadow-2xl p-6"
+          >
+            <h3 className="text-2xl font-bold text-white/95 mb-4 flex items-center gap-2">
+              <Award className="w-5 h-5 text-emerald-300" /> Achievements
             </h3>
-            
-            <div className="space-y-4">
-              <div>
-                <div className="flex justify-between text-sm mb-2">
-                  <span className="text-white/70">Tasks</span>
-                  <span className="text-white">{profileData.monthlyProgress.tasks.completed}/{profileData.monthlyProgress.tasks.total}</span>
-                </div>
-                <div className="w-full bg-white/10 rounded-full h-2">
-                  <div 
-                    className="bg-gradient-to-r from-green-500 to-emerald-500 h-2 rounded-full" 
-                    style={{width: `${(profileData.monthlyProgress.tasks.completed / profileData.monthlyProgress.tasks.total) * 100}%`}}
-                  ></div>
-                </div>
-              </div>
-              
-              <div>
-                <div className="flex justify-between text-sm mb-2">
-                  <span className="text-white/70">Games</span>
-                  <span className="text-white">{profileData.monthlyProgress.games.completed}/{profileData.monthlyProgress.games.total}</span>
-                </div>
-                <div className="w-full bg-white/10 rounded-full h-2">
-                  <div 
-                    className="bg-gradient-to-r from-blue-500 to-cyan-500 h-2 rounded-full" 
-                    style={{width: `${(profileData.monthlyProgress.games.completed / profileData.monthlyProgress.games.total) * 100}%`}}
-                  ></div>
-                </div>
-              </div>
-              
-              <div>
-                <div className="flex justify-between text-sm mb-2">
-                  <span className="text-white/70">Quizzes</span>
-                  <span className="text-white">{profileData.monthlyProgress.quizzes.completed}/{profileData.monthlyProgress.quizzes.total}</span>
-                </div>
-                <div className="w-full bg-white/10 rounded-full h-2">
-                  <div 
-                    className="bg-gradient-to-r from-orange-500 to-red-500 h-2 rounded-full" 
-                    style={{width: `${(profileData.monthlyProgress.quizzes.completed / profileData.monthlyProgress.quizzes.total) * 100}%`}}
-                  ></div>
-                </div>
-              </div>
-              
-              <div>
-                <div className="flex justify-between text-sm mb-2">
-                  <span className="text-white/70">Assignments</span>
-                  <span className="text-white">{profileData.monthlyProgress.assignments.completed}/{profileData.monthlyProgress.assignments.total}</span>
-                </div>
-                <div className="w-full bg-white/10 rounded-full h-2">
-                  <div 
-                    className="bg-gradient-to-r from-indigo-500 to-purple-500 h-2 rounded-full" 
-                    style={{width: `${(profileData.monthlyProgress.assignments.completed / profileData.monthlyProgress.assignments.total) * 100}%`}}
-                  ></div>
-                </div>
-              </div>
-              
-              <div>
-                <div className="flex justify-between text-sm mb-2">
-                  <span className="text-white/70">Videos</span>
-                  <span className="text-white">{profileData.monthlyProgress.videos.completed}/{profileData.monthlyProgress.videos.total}</span>
-                </div>
-                <div className="w-full bg-white/10 rounded-full h-2">
-                  <div 
-                    className="bg-gradient-to-r from-pink-500 to-rose-500 h-2 rounded-full" 
-                    style={{width: `${(profileData.monthlyProgress.videos.completed / profileData.monthlyProgress.videos.total) * 100}%`}}
-                  ></div>
-                </div>
-              </div>
-            </div>
-          </div>
-          
-          <div className="bg-white/10 backdrop-blur-xl border border-white/20 shadow-xl rounded-xl p-6">
-            <h3 className="text-xl font-bold text-white/90 mb-4">Activity Streak</h3>
-            
-            <div className="text-center mb-4">
-              <div className="text-4xl font-bold text-white mb-2">{profileData.activityStreak}</div>
-              <p className="text-white/70">Days Active</p>
-            </div>
-            
-            <div className="grid grid-cols-7 gap-1">
-              {[...Array(7)].map((_, index) => (
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              {profileData.achievements.map((achievement) => (
                 <div
-                  key={index}
-                  className={`h-8 rounded ${
-                    index < profileData.activityStreak ? 'bg-green-500/70' : 'bg-white/10'
+                  key={achievement.key}
+                  className={`group p-4 rounded-2xl border transition-all duration-300 hover:-translate-y-1 hover:shadow-lg ${
+                    achievement.unlocked
+                      ? 'bg-emerald-500/15 border-emerald-300/20 hover:border-emerald-200/40'
+                      : 'bg-black/15 border-white/10 opacity-70'
                   }`}
-                />
+                >
+                  <div className="flex items-center gap-3">
+                    {achievement.unlocked ? (
+                      <CheckCircle2 className="w-6 h-6 text-emerald-300 flex-shrink-0" />
+                    ) : (
+                      <Lock className="w-6 h-6 text-white/35 flex-shrink-0" />
+                    )}
+                    <div>
+                      <p className="font-medium text-white">{achievement.name}</p>
+                      <p className="text-xs text-white/60">{achievement.unlocked ? 'Unlocked' : 'Locked'}</p>
+                    </div>
+                  </div>
+                </div>
               ))}
             </div>
-            
-            <p className="text-center text-white/60 text-sm mt-3">
-              {profileData.activityStreak >= 7 ? "Amazing streak! 🔥" : "Keep going! 💪"}
-            </p>
-          </div>
-        </div>
+          </motion.div>
+        )}
+
+        {profileData.timeline && profileData.timeline.length > 0 && (
+          <motion.div
+            id="timeline"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6, delay: 0.4 }}
+            className="rounded-3xl border border-white/10 bg-white/8 backdrop-blur-xl shadow-2xl p-6"
+          >
+            <h3 className="text-2xl font-bold text-white/95 mb-4 flex items-center gap-2">
+              <TrendingUp className="w-5 h-5 text-cyan-300" /> Recent Activity
+            </h3>
+            <div className="space-y-3 max-h-[28rem] overflow-y-auto pr-1">
+              {profileData.timeline.slice(0, 10).map((item, idx) => (
+                <div key={idx} className="flex items-start gap-4 p-4 rounded-2xl bg-black/20 border border-white/10 hover:border-cyan-300/20 transition-colors">
+                  <div className="h-11 w-11 rounded-xl bg-white/10 flex items-center justify-center text-xl flex-shrink-0">
+                    {item.kind === 'task' ? '✅' : item.kind === 'quiz' ? '🧠' : '🎮'}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-white font-medium truncate">{item.title}</p>
+                    <p className="text-white/55 text-xs mt-1">{new Date(item.when).toLocaleString()}</p>
+                    {(item.points || item.scorePercent) && (
+                      <p className="text-emerald-300 text-sm mt-2">
+                        {typeof item.points === 'number' ? `+${item.points} points` : ''}
+                        {typeof item.points === 'number' && typeof item.scorePercent === 'number' ? ' • ' : ''}
+                        {typeof item.scorePercent === 'number' ? `Score: ${item.scorePercent}%` : ''}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </motion.div>
+        )}
       </div>
     </div>
   );

@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { ChevronUp, ChevronDown } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useLocation } from 'wouter';
+import { motion } from 'framer-motion';
 
 interface TopicCard {
   id: string;
@@ -126,12 +127,35 @@ export function TopicCards() {
   className="space-y-3 max-h-[70vh] md:max-h-[78vh] overflow-y-auto scrollbar-hide pr-1"
         data-testid="scroll-container-topics"
       >
-        {topics.map((topic) => (
-          <div
+        {topics.map((topic, index) => (
+          <motion.div
             key={topic.id}
             onClick={() => handleTopicClick(topic.id)}
-            className="topic-card p-3 rounded-xl cursor-pointer transition-all duration-300 hover:translate-x-[-6px] hover:scale-[1.01]"
+            className="topic-card p-3 rounded-xl cursor-pointer relative overflow-hidden"
             data-testid={`card-topic-${topic.id}`}
+            // Initial animation on mount with stagger effect
+            initial={{ opacity: 0, x: -20 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{
+              duration: 0.4,
+              delay: index * 0.05, // Stagger by 50ms per card
+              ease: [0.4, 0, 0.2, 1]
+            }}
+            // Smooth hover animation with lift effect
+            whileHover={{
+              y: -8,
+              scale: 1.02,
+              transition: {
+                duration: 0.3,
+                ease: [0.4, 0, 0.2, 1]
+              }
+            }}
+            whileTap={{
+              scale: 0.98,
+              transition: {
+                duration: 0.15
+              }
+            }}
           >
             <div className="flex items-center space-x-4">
               <div className="w-14 h-14 rounded-lg overflow-hidden flex-shrink-0">
@@ -149,7 +173,7 @@ export function TopicCards() {
                 </h3>
               </div>
             </div>
-          </div>
+          </motion.div>
         ))}
       </div>
 

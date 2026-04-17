@@ -4,6 +4,43 @@ import { Button } from "@/components/ui/button";
 import { ArrowLeft, Crown, School, Search, Trophy, Users } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 
+// Define CSS animations
+const animationStyles = `
+  @keyframes fadeInLeft {
+    from {
+      opacity: 0;
+      transform: translateX(-20px);
+    }
+    to {
+      opacity: 1;
+      transform: translateX(0);
+    }
+  }
+
+  @keyframes fadeInUp {
+    from {
+      opacity: 0;
+      transform: translateY(20px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  .animate-in {
+    animation: fadeInUp 0.6s ease-out;
+  }
+
+  .fade-in {
+    animation: fadeInUp 0.6s ease-out both;
+  }
+
+  .slide-in-from-bottom-4 {
+    animation: fadeInUp 0.6s ease-out;
+  }
+`;
+
 type SchoolRow = { schoolId: string; schoolName: string; ecoPoints: number; students: number };
 type StudentRow = { username: string; name?: string; ecoPoints: number };
 type GlobalStudentRow = {
@@ -126,7 +163,7 @@ export default function LeaderboardPage() {
 
   return (
     <div 
-      className="min-h-screen text-white p-6 relative"
+      className="min-h-screen text-white p-6 relative overflow-hidden"
       style={{
         backgroundImage: 'url(/api/image/pexels-thatguycraig000-1563356.jpg)',
         backgroundSize: 'cover',
@@ -134,51 +171,92 @@ export default function LeaderboardPage() {
         backgroundRepeat: 'no-repeat'
       }}
     >
-      {/* Overlay for better text visibility */}
-      <div className="absolute inset-0 bg-black/60"></div>
+      {/* Animated gradient overlay */}
+      <div className="absolute inset-0 bg-gradient-to-br from-black/40 via-black/50 to-black/60"></div>
+      
+      {/* Decorative elements */}
+      <div className="absolute top-20 left-10 w-32 h-32 bg-yellow-500/10 rounded-full blur-3xl animate-pulse"></div>
+      <div className="absolute bottom-20 right-10 w-40 h-40 bg-blue-500/10 rounded-full blur-3xl animate-pulse" style={{animationDelay: '1s'}}></div>
       
       {/* Content */}
       <div className="relative z-10">
-        <div className="bg-white/10 backdrop-blur-xl border border-white/20 shadow-xl rounded-xl p-6 mb-6">
-          <div className="flex items-center gap-3">
+        <div className="bg-white/5 backdrop-blur-2xl border border-white/20 shadow-2xl rounded-2xl p-8 mb-8 hover:bg-white/10 transition-all duration-300 group">
+          <div className="flex items-center gap-3 mb-3">
             {selectedSchool && (
               <Button 
                 variant="secondary" 
                 size="sm" 
                 onClick={backToGlobal}
-                className="bg-white/20 hover:bg-white/30 text-white border-white/30"
+                className="bg-white/20 hover:bg-white/30 text-white border-white/30 rounded-lg"
               >
-                <ArrowLeft size={14} className="mr-1" /> Back
+                <ArrowLeft size={16} className="mr-1" /> Back
               </Button>
             )}
-            <h1 className="text-3xl font-bold text-white/90">Leaderboard</h1>
+            <Trophy size={36} className="text-yellow-300 group-hover:scale-110 transition-transform" />
+            <div>
+              <h1 className="text-4xl font-bold text-white/95 group-hover:text-white transition-colors">Leaderboard</h1>
+              <p className="text-sm text-white/70 group-hover:text-white/80 transition-colors mt-1">Compete and rank globally!</p>
+            </div>
           </div>
-          <p className="mt-2 text-white/70">See how students and schools rank globally!</p>
         </div>
 
-      {/* Header filters */}
-      <div className="flex flex-wrap items-center gap-2 mb-4">
-        <div className="inline-flex rounded-full border border-white/20 bg-white/10 backdrop-blur-sm p-1">
-          {(['global','school','class'] as const).map((s) => (
-            <button key={s} onClick={()=>setScope(s)} className={`px-3 py-1 rounded-full text-sm text-white/90 ${scope===s?'bg-white/20':'hover:bg-white/10'}`}>{s==='global'?'🌍 Global':s==='school'?'🏫 School':'👥 Class'}</button>
+      {/* Header filters - Enhanced */}
+      <div className="flex flex-wrap items-center gap-3 mb-6 p-4 bg-white/5 backdrop-blur-xl border border-white/20 rounded-2xl">
+        <div className="inline-flex rounded-xl border border-white/30 bg-white/10 backdrop-blur-sm p-1 shadow-lg">
+          {(['global','school','class'] as const).map((s, idx) => (
+            <button 
+              key={s} 
+              onClick={()=>setScope(s)} 
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-all duration-300 ${
+                scope===s
+                  ?'bg-gradient-to-r from-blue-500 to-cyan-500 text-white shadow-lg shadow-blue-500/30' 
+                  :'text-white/70 hover:text-white/90 hover:bg-white/10'
+              }`}
+              style={{ animation: `fadeInLeft 0.6s ease-out ${idx * 0.1}s both` }}
+            >
+              {s==='global'?'🌍 Global':s==='school'?'🏫 School':'👥 Class'}
+            </button>
           ))}
         </div>
-        <div className="inline-flex rounded-full border border-white/20 bg-white/10 backdrop-blur-sm p-1 ml-2">
-          {(['schools','students','teachers'] as const).map((t)=> (
-            <button key={t} onClick={()=>setTab(t)} className={`px-3 py-1 rounded-full text-sm text-white/90 ${tab===t?'bg-white/20':'hover:bg-white/10'}`}>{t[0].toUpperCase()+t.slice(1)}</button>
+        
+        <div className="inline-flex rounded-xl border border-white/30 bg-white/10 backdrop-blur-sm p-1 shadow-lg">
+          {(['schools','students','teachers'] as const).map((t, idx)=> (
+            <button 
+              key={t} 
+              onClick={()=>setTab(t)} 
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-all duration-300 ${
+                tab===t
+                  ?'bg-gradient-to-r from-emerald-500 to-cyan-500 text-white shadow-lg shadow-emerald-500/30' 
+                  :'text-white/70 hover:text-white/90 hover:bg-white/10'
+              }`}
+              style={{ animation: `fadeInLeft 0.6s ease-out ${(idx + 3) * 0.1}s both` }}
+            >
+              {t[0].toUpperCase()+t.slice(1)}
+            </button>
           ))}
         </div>
+        
         {(tab==='students' || tab==='teachers') && (
-          <div className="ml-2">
-            <select value={schoolFilter} onChange={(e)=>setSchoolFilter(e.target.value)} className="rounded-md border border-white/20 bg-white/10 backdrop-blur-sm px-2 py-1 text-sm text-white">
+          <div className="ml-2 animate-in fade-in slide-in-from-left-2 duration-300">
+            <select 
+              value={schoolFilter} 
+              onChange={(e)=>setSchoolFilter(e.target.value)} 
+              className="rounded-lg border border-white/30 bg-white/10 backdrop-blur-sm px-3 py-2 text-sm text-white hover:bg-white/20 transition-all focus:outline-none focus:border-white/50 focus:bg-white/20"
+            >
               <option value="" className="text-gray-900">All Schools</option>
               {schoolsList.map(s => (<option key={s.id} value={s.id} className="text-gray-900">{s.name}</option>))}
             </select>
           </div>
         )}
-        <div className="ml-auto flex items-center gap-2 rounded-lg border border-white/20 bg-white/10 backdrop-blur-sm px-2">
-          <Search size={14} className="text-white/70" />
-          <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search school or student…" className="bg-transparent outline-none text-sm py-1 text-white placeholder-white/60" />
+        
+        <div className="ml-auto flex items-center gap-2 rounded-lg border border-white/30 bg-white/10 backdrop-blur-sm px-3 py-2 hover:bg-white/20 transition-all">
+          <Search size={16} className="text-white/70" />
+          <input 
+            value={search} 
+            onChange={e=>setSearch(e.target.value)} 
+            placeholder="Search…" 
+            className="bg-transparent outline-none text-sm py-0 text-white placeholder-white/50 focus:text-white"
+          />
         </div>
       </div>
 
@@ -186,18 +264,19 @@ export default function LeaderboardPage() {
         <div>
           {tab === 'schools' && (
             <>
-          <p className="mt-1 text-white/70">Global top schools ranked by eco-points.</p>
-          <div className="mt-4 rounded-lg border border-white/20 bg-white/10 backdrop-blur-xl overflow-hidden">
-            <div className="grid grid-cols-12 px-4 py-2 text-xs text-white/70 border-b border-white/20">
+          <p className="mt-1 text-white/70 mb-4">🏆 Global top schools ranked by eco-points</p>
+          <div className="mt-4 rounded-2xl border border-white/20 bg-white/5 backdrop-blur-2xl overflow-hidden shadow-2xl">
+            <div className="grid grid-cols-12 px-6 py-4 text-xs text-white/70 border-b border-white/20 bg-gradient-to-r from-white/5 to-transparent font-semibold">
               <div className="col-span-2">Rank</div>
               <div className="col-span-4">School</div>
               <div className="col-span-3">Top Student</div>
               <div className="col-span-1 text-right">👥</div>
               <div className="col-span-2 text-right">Eco-Points</div>
             </div>
-            <div className="divide-y divide-white/20">
-              {loading && <div className="px-4 py-6 text-white/70 text-sm">Loading…</div>}
-              {schoolsError && <div className="px-4 py-6 text-red-300 text-sm">{schoolsError}</div>}
+            <div className="divide-y divide-white/10">
+              {loading && <div className="px-6 py-8 text-white/70 text-sm text-center"><div className="w-8 h-8 rounded-full border-2 border-white/30 border-t-white/90 animate-spin mx-auto"></div></div>}
+              {schoolsError && <div className="px-6 py-8 text-red-300 text-sm text-center">{schoolsError}</div>}
+
               {(!loading && !schoolsError && (schools?.length ?? 0) === 0) && (
                 <div className="px-4 py-6 text-white/70 text-sm">No schools yet.</div>
               )}
@@ -205,22 +284,22 @@ export default function LeaderboardPage() {
                 <HoverCard key={s.schoolId}>
                   <HoverCardTrigger asChild>
                     <button
-                      className="w-full grid grid-cols-12 px-4 py-3 hover:bg-white/10 text-left text-white/90"
+                      className="w-full grid grid-cols-12 px-6 py-4 hover:bg-white/10 text-left text-white/90 transition-all duration-200 group"
                       onClick={() => loadStudents(s)}
                     >
-                      <div className="col-span-2 flex items-center gap-2 text-sm">
-                        {idx===0?<Crown size={14} className="text-yellow-300"/>:<Trophy size={14} className={idx < 3 ? 'text-yellow-300' : 'text-white/60'} />}
-                        #{idx + 1}
+                      <div className="col-span-2 flex items-center gap-3 text-sm font-semibold">
+                        {idx===0?<Crown size={18} className="text-yellow-300 animate-bounce"/>:<Trophy size={18} className={idx < 3 ? 'text-yellow-300' : 'text-white/40'} />}
+                        <span className="group-hover:text-yellow-300 transition-colors">#{idx + 1}</span>
                       </div>
-                      <div className="col-span-4 flex items-center gap-2">
-                        <School size={16} className="text-emerald-300" />
-                        <span className="truncate">{s.schoolName}</span>
+                      <div className="col-span-4 flex items-center gap-3 group-hover:text-white transition-colors">
+                        <School size={18} className="text-emerald-300 group-hover:scale-110 transition-transform" />
+                        <span className="truncate font-medium group-hover:underline">{s.schoolName}</span>
                       </div>
-                      <div className="col-span-3 text-sm text-white/70">{/* Top student will be fetched in hover preview */}—</div>
-                      <div className="col-span-1 text-right text-white/70 flex items-center justify-end gap-1">
-                        <Users size={14} /> {s.students}
+                      <div className="col-span-3 text-sm text-white/70 group-hover:text-white/90 transition-colors">—</div>
+                      <div className="col-span-1 text-right text-white/70 flex items-center justify-end gap-1 group-hover:text-white transition-colors">
+                        <Users size={16} /> {s.students}
                       </div>
-                      <div className="col-span-2 text-right font-medium">{formatPoints(s.ecoPoints)}</div>
+                      <div className="col-span-2 text-right font-bold text-yellow-300 group-hover:text-yellow-200 transition-colors">{formatPoints(s.ecoPoints)}</div>
                     </button>
                   </HoverCardTrigger>
                   <HoverCardContent>
@@ -234,16 +313,16 @@ export default function LeaderboardPage() {
           )}
 
           {tab === 'students' && (
-            <div className="mt-4 rounded-lg border border-white/20 bg-white/10 backdrop-blur-xl overflow-hidden">
-              <div className="grid grid-cols-12 px-4 py-2 text-xs text-white/70 border-b border-white/20">
+            <div className="mt-4 rounded-2xl border border-white/20 bg-white/5 backdrop-blur-2xl overflow-hidden shadow-2xl">
+              <div className="grid grid-cols-12 px-6 py-4 text-xs text-white/70 border-b border-white/20 bg-gradient-to-r from-white/5 to-transparent font-semibold">
                 <div className="col-span-2">Rank</div>
                 <div className="col-span-4">Student</div>
                 <div className="col-span-4">School</div>
                 <div className="col-span-2 text-right">Eco-Points</div>
               </div>
-              <div className="divide-y divide-white/20">
-                {loadingTab && <div className="px-4 py-6 text-white/70 text-sm">Loading…</div>}
-                {(!loadingTab && (globalStudents?.length ?? 0) === 0) && <div className="px-4 py-6 text-white/70 text-sm">No students found.</div>}
+              <div className="divide-y divide-white/10">
+                {loadingTab && <div className="px-6 py-8 text-white/70 text-sm text-center"><div className="w-8 h-8 rounded-full border-2 border-white/30 border-t-white/90 animate-spin mx-auto"></div></div>}
+                {(!loadingTab && (globalStudents?.length ?? 0) === 0) && <div className="px-6 py-8 text-white/70 text-sm text-center">🔍 No students found.</div>}
                 {(globalStudents || []).filter(r => !search || r.username.toLowerCase().includes(search.toLowerCase()) || (r.name||'').toLowerCase().includes(search.toLowerCase()) || (r.schoolName||'').toLowerCase().includes(search.toLowerCase())).map((r, idx) => (
                   <GlobalStudentRowItem key={r.username} row={r} rank={idx + 1} isMe={me === r.username} />
                 ))}
@@ -252,8 +331,8 @@ export default function LeaderboardPage() {
           )}
 
           {tab === 'teachers' && (
-            <div className="mt-4 rounded-lg border border-white/20 bg-white/10 backdrop-blur-xl overflow-hidden">
-              <div className="grid grid-cols-12 px-4 py-2 text-xs text-white/70 border-b border-white/20">
+            <div className="mt-4 rounded-2xl border border-white/20 bg-white/5 backdrop-blur-2xl overflow-hidden shadow-2xl">
+              <div className="grid grid-cols-12 px-6 py-4 text-xs text-white/70 border-b border-white/20 bg-gradient-to-r from-white/5 to-transparent font-semibold">
                 <div className="col-span-2">Rank</div>
                 <div className="col-span-4">Teacher</div>
                 <div className="col-span-2">School</div>
@@ -261,19 +340,22 @@ export default function LeaderboardPage() {
                 <div className="col-span-1 text-right">Tasks</div>
                 <div className="col-span-1 text-right">Quizzes</div>
               </div>
-              <div className="divide-y divide-white/20">
-                {loadingTab && <div className="px-4 py-6 text-white/70 text-sm">Loading…</div>}
-                {(!loadingTab && (teachers?.length ?? 0) === 0) && <div className="px-4 py-6 text-white/70 text-sm">No teachers found.</div>}
+              <div className="divide-y divide-white/10">
+                {loadingTab && <div className="px-6 py-8 text-white/70 text-sm text-center"><div className="w-8 h-8 rounded-full border-2 border-white/30 border-t-white/90 animate-spin mx-auto"></div></div>}
+                {(!loadingTab && (teachers?.length ?? 0) === 0) && <div className="px-6 py-8 text-white/70 text-sm text-center">🔍 No teachers found.</div>}
                 {(teachers || []).filter(r => !search || r.username.toLowerCase().includes(search.toLowerCase()) || (r.name||'').toLowerCase().includes(search.toLowerCase()) || (r.schoolName||'').toLowerCase().includes(search.toLowerCase())).map((t, idx) => (
                   <HoverCard key={t.username}>
                     <HoverCardTrigger asChild>
-                      <div className="grid grid-cols-12 px-4 py-3 hover:bg-white/10 text-white/90">
-                        <div className="col-span-2 text-sm">#{idx + 1}</div>
-                        <div className="col-span-4 font-medium">@{t.username} {t.name && <span className="text-white/70 ml-1">{t.name}</span>}</div>
-                        <div className="col-span-2 text-white/70">{t.schoolName || '—'}</div>
-                        <div className="col-span-2 text-right font-medium">{formatPoints(t.ecoPoints)}</div>
-                        <div className="col-span-1 text-right">{t.tasksCreated}</div>
-                        <div className="col-span-1 text-right">{t.quizzesCreated}</div>
+                      <div className="grid grid-cols-12 px-6 py-4 hover:bg-white/10 text-white/90 transition-all duration-200 group cursor-default">
+                        <div className="col-span-2 text-sm font-semibold flex items-center gap-2">
+                          {idx < 3 ? <Trophy size={16} className="text-yellow-300" /> : null}
+                          <span className="group-hover:text-yellow-300 transition-colors">#{idx + 1}</span>
+                        </div>
+                        <div className="col-span-4 font-medium group-hover:text-white transition-colors">@{t.username} {t.name && <span className="text-white/70 ml-2">{t.name}</span>}</div>
+                        <div className="col-span-2 text-white/70 group-hover:text-white/90 transition-colors">{t.schoolName || '—'}</div>
+                        <div className="col-span-2 text-right font-bold text-yellow-300 group-hover:text-yellow-200 transition-colors">{formatPoints(t.ecoPoints)}</div>
+                        <div className="col-span-1 text-right text-white/70 group-hover:text-white/90 transition-colors">{t.tasksCreated}</div>
+                        <div className="col-span-1 text-right text-white/70 group-hover:text-white/90 transition-colors">{t.quizzesCreated}</div>
                       </div>
                     </HoverCardTrigger>
                     <HoverCardContent>
@@ -286,26 +368,26 @@ export default function LeaderboardPage() {
           )}
         </div>
       ) : (
-        <div>
-          <div className="flex items-center justify-between">
+        <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+          <div className="flex items-center justify-between mb-6">
             <div>
-              <div className="text-earth-muted text-xs">Global › School</div>
-              <h2 className="text-2xl font-semibold">{selectedSchool.schoolName}</h2>
-              <div className="text-sm text-earth-muted">Top students in this school</div>
+              <div className="text-yellow-300/70 text-xs font-semibold mb-1">🌍 Global › 🏫 School</div>
+              <h2 className="text-3xl font-bold text-white/95">{selectedSchool.schoolName}</h2>
+              <div className="text-sm text-white/70 mt-1">⭐ Top students in this school</div>
             </div>
           </div>
 
-          <div className="mt-4 rounded-lg border border-white/20 bg-white/10 backdrop-blur-xl overflow-hidden">
-            <div className="grid grid-cols-12 px-4 py-2 text-xs text-white/70 border-b border-white/20">
+          <div className="rounded-2xl border border-white/20 bg-white/5 backdrop-blur-2xl overflow-hidden shadow-2xl">
+            <div className="grid grid-cols-12 px-6 py-4 text-xs text-white/70 border-b border-white/20 bg-gradient-to-r from-white/5 to-transparent font-semibold">
               <div className="col-span-2">Rank</div>
               <div className="col-span-6">Student</div>
               <div className="col-span-4 text-right">Eco-Points</div>
             </div>
-            <div className="divide-y divide-white/20">
-              {loadingStudents && <div className="px-4 py-6 text-white/70 text-sm">Loading…</div>}
-              {studentsError && <div className="px-4 py-6 text-red-300 text-sm">{studentsError}</div>}
+            <div className="divide-y divide-white/10">
+              {loadingStudents && <div className="px-6 py-8 text-white/70 text-sm text-center"><div className="w-8 h-8 rounded-full border-2 border-white/30 border-t-white/90 animate-spin mx-auto"></div></div>}
+              {studentsError && <div className="px-6 py-8 text-red-300 text-sm text-center">❌ {studentsError}</div>}
               {(!loadingStudents && !studentsError && (students?.length ?? 0) === 0) && (
-                <div className="px-4 py-6 text-white/70 text-sm">No students yet.</div>
+                <div className="px-6 py-8 text-white/70 text-sm text-center">🔍 No students yet.</div>
               )}
               {(students || []).map((u, idx) => (
                 <StudentRowItem key={u.username} row={u} rank={idx + 1} isMe={me === u.username} />
@@ -315,6 +397,8 @@ export default function LeaderboardPage() {
         </div>
       )}
       </div>
+
+      <style>{animationStyles}</style>
     </div>
   );
 }

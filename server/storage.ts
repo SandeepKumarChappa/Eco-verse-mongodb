@@ -54,6 +54,9 @@ export interface IStorage {
   // Student Profile (dashboard view)
   getStudentProfile(username: string): Promise<StudentProfileView | null>;
   setStudentPrivacy(username: string, allowExternalView: boolean): Promise<{ ok: true } | { ok: false; error: string }>;
+  // Learning modules
+  listLessonCompletions(studentUsername: string): Promise<LessonCompletion[]>;
+  completeLesson(studentUsername: string, input: { moduleId: string; moduleTitle: string; lessonId: string; lessonTitle: string; points: number }): Promise<{ ok: true; completion: LessonCompletion; alreadyCompleted: boolean } | { ok: false; error: string }>;
   // Activity logging & notifications
   addQuizAttempt(studentUsername: string, input: { quizId: string; answers?: number[]; scorePercent?: number }): Promise<{ ok: true; attempt: QuizAttempt } | { ok: false; error: string }>;
   getStudentQuizAttempt(username: string, quizId: string): Promise<QuizAttempt | null>;
@@ -125,6 +128,7 @@ export class MemStorage implements IStorage {
   private quizAttempts: Map<string, QuizAttempt>;
   private gamePlays: Map<string, GamePlay>;
   private games: Map<string, Game>;
+  private lessonCompletions: Map<string, LessonCompletion>;
   private notifications: Map<string, NotificationItem>;
   private lastGamePlay: Map<string, number>; // key: studentId|gameId -> ts
   private videos: Map<string, Video>;
@@ -150,6 +154,7 @@ export class MemStorage implements IStorage {
   this.quizAttempts = new Map();
   this.gamePlays = new Map();
   this.games = new Map();
+  this.lessonCompletions = new Map();
   this.notifications = new Map();
   this.lastGamePlay = new Map();
   this.videos = new Map();
@@ -178,6 +183,7 @@ export class MemStorage implements IStorage {
   for (const qa of raw.quizAttempts ?? []) this.quizAttempts.set(qa.id, qa);
   for (const gp of raw.gamePlays ?? []) this.gamePlays.set(gp.id, gp);
   for (const g of raw.games ?? []) this.games.set(g.id, g);
+  for (const lc of raw.lessonCompletions ?? []) this.lessonCompletions.set(lc.id, lc);
   for (const n of raw.notifications ?? []) this.notifications.set(n.id, n);
   for (const v of raw.videos ?? []) this.videos.set(v.id, v);
   for (const p of raw.userVideoProgress ?? []) this.userVideoProgress.set(p.id, p);
@@ -550,6 +556,7 @@ export class MemStorage implements IStorage {
   quizAttempts: Array.from(this.quizAttempts.values()),
   gamePlays: Array.from(this.gamePlays.values()),
   games: Array.from(this.games.values()),
+  lessonCompletions: Array.from(this.lessonCompletions.values()),
   notifications: Array.from(this.notifications.values()),
   videos: Array.from(this.videos.values()),
   userVideoProgress: Array.from(this.userVideoProgress.values()),
@@ -691,7 +698,7 @@ export class MemStorage implements IStorage {
   const rec = this.otps.get(key);
     if (!rec) return false;
   const ok = rec.code === sanitized && Date.now() <= rec.expires;
-  if (ok) this.otps.delete(key);
+  // if (ok) this.otps.delete(key);
     return ok;
   }
 
@@ -868,6 +875,13 @@ export class MemStorage implements IStorage {
         timeline.push({ kind: 'game', when: gp.playedAt, title: gp.gameId, lastPlayedAt: gp.playedAt });
       }
     });
+    // include lesson completions
+    this.lessonCompletions.forEach((lc) => {
+      if (lc.studentUserId === uid) {
+        ecoPoints += Number(lc.points || 0);
+        timeline.push({ kind: 'lesson', when: lc.completedAt, title: `${lc.moduleTitle}: ${lc.lessonTitle}`, points: lc.points, moduleId: lc.moduleId, lessonId: lc.lessonId });
+      }
+    });
     timeline.sort((a,b)=> (b.when||0)-(a.when||0));
     // Eco-tree stage
     const ecoTreeStage = ecoPoints >= 500 ? 'Big Tree' : ecoPoints >= 100 ? 'Small Tree' : 'Seedling';
@@ -885,6 +899,7 @@ export class MemStorage implements IStorage {
     let score = 0;
     this.submissions.forEach((s) => { if (s.studentUserId === id && s.status === 'approved') score += Number(s.points||0); });
     this.quizAttempts.forEach((a) => { if (a.studentUserId === id) { const q = this.quizzes.get(a.quizId); if (q) score += Number(q.points||0); } });
+    this.lessonCompletions.forEach((lc) => { if (lc.studentUserId === id) score += Number(lc.points || 0); });
         const prof = this.profiles.get(id) || {};
         studentScores.push({ uid: id, username: u.username, eco: score, schoolId: prof.schoolId });
       }
@@ -954,6 +969,12 @@ export class MemStorage implements IStorage {
       if (!perSchool.has(sid)) perSchool.set(sid, { eco: 0, students: 0 });
       perSchool.get(sid)!.eco += Number(quiz.points || 0);
     });
+    // lesson points
+    this.lessonCompletions.forEach(lc => {
+      const sid = (this.profiles.get(lc.studentUserId) || {}).schoolId || '';
+      if (!perSchool.has(sid)) perSchool.set(sid, { eco: 0, students: 0 });
+      perSchool.get(sid)!.eco += Number(lc.points || 0);
+    });
     const schools = Array.from(this.schools.values());
     const rows = Array.from(perSchool.entries()).map(([schoolId, v]) => ({
       schoolId,
@@ -978,6 +999,7 @@ export class MemStorage implements IStorage {
       let eco = 0;
       this.submissions.forEach(s => { if (s.studentUserId === id && s.status === 'approved') eco += Number(s.points||0); });
       this.quizAttempts.forEach(a => { if (a.studentUserId === id) { const q = this.quizzes.get(a.quizId); if (q) eco += Number(q.points||0); } });
+      this.lessonCompletions.forEach(lc => { if (lc.studentUserId === id) eco += Number(lc.points || 0); });
       const u = this.users.get(id)!;
       const p = this.profiles.get(id) || {};
       rows.push({ username: u.username, name: p.name, ecoPoints: eco });
@@ -996,6 +1018,7 @@ export class MemStorage implements IStorage {
     let eco = 0;
     this.submissions.forEach(s => { if (s.studentUserId === id && s.status === 'approved') eco += Number(s.points||0); });
     this.quizAttempts.forEach(a => { if (a.studentUserId === id) { const q = this.quizzes.get(a.quizId); if (q) eco += Number(q.points||0); } });
+    this.lessonCompletions.forEach(lc => { if (lc.studentUserId === id) eco += Number(lc.points || 0); });
     const p = this.profiles.get(id) || {};
     return { username: u.username, name: p.name, ecoPoints: eco, schoolId: p.schoolId };
   }
@@ -1011,6 +1034,7 @@ export class MemStorage implements IStorage {
         let quizzesCompleted = 0;
         this.submissions.forEach(s => { if (s.studentUserId === id && s.status === 'approved') { eco += Number(s.points||0); tasksApproved++; } });
         this.quizAttempts.forEach(a => { if (a.studentUserId === id) { const q = this.quizzes.get(a.quizId); if (q) { eco += Number(q.points||0); quizzesCompleted++; } } });
+        this.lessonCompletions.forEach(lc => { if (lc.studentUserId === id) eco += Number(lc.points || 0); });
         const school = p.schoolId ? this.schools.get(p.schoolId) : undefined;
         const achievements: string[] = [];
         if (tasksApproved > 0) achievements.push('🥇 First Task');
@@ -1110,6 +1134,13 @@ export class MemStorage implements IStorage {
         if (q) totalEcoPointsThisWeek += Number(q.points || 0);
       }
     });
+    this.lessonCompletions.forEach(lc => {
+      if (lc.completedAt >= startMs) {
+        const sid = (this.profiles.get(lc.studentUserId) || {}).schoolId;
+        if (sid) activeSchoolIds.add(sid);
+        totalEcoPointsThisWeek += Number(lc.points || 0);
+      }
+    });
     // New approved students this week
     let newStudentsThisWeek = 0;
     // We don't persist user creation timestamps; infer via profile presence timing is absent.
@@ -1117,9 +1148,11 @@ export class MemStorage implements IStorage {
     const seenBefore = new Set<string>();
     this.submissions.forEach(s => { if (s.status === 'approved' && (s.reviewedAt || s.submittedAt) < startMs) seenBefore.add(s.studentUserId); });
     this.quizAttempts.forEach(a => { if (a.attemptedAt < startMs) seenBefore.add(a.studentUserId); });
+    this.lessonCompletions.forEach(lc => { if (lc.completedAt < startMs) seenBefore.add(lc.studentUserId); });
     const activeThisWeek = new Set<string>();
     this.submissions.forEach(s => { if (s.status === 'approved' && (s.reviewedAt || s.submittedAt) >= startMs) activeThisWeek.add(s.studentUserId); });
     this.quizAttempts.forEach(a => { if (a.attemptedAt >= startMs) activeThisWeek.add(a.studentUserId); });
+    this.lessonCompletions.forEach(lc => { if (lc.completedAt >= startMs) activeThisWeek.add(lc.studentUserId); });
     activeThisWeek.forEach(id => { if (!seenBefore.has(id)) newStudentsThisWeek++; });
     // Inactive schools = schools with zero activity in week
     const inactiveSchools: Array<{ schoolId: string; schoolName: string }> = [];
@@ -1146,6 +1179,7 @@ export class MemStorage implements IStorage {
     this.submissions.forEach(s => { if (s.studentUserId === uid) mark(s.submittedAt); });
     this.quizAttempts.forEach(a => { if (a.studentUserId === uid) mark(a.attemptedAt); });
     this.gamePlays.forEach(g => { if (g.studentUserId === uid) mark(g.playedAt); });
+    this.lessonCompletions.forEach(lc => { if (lc.studentUserId === uid) mark(lc.completedAt); });
     return { days, start: monday.getTime() };
   }
 
@@ -1169,6 +1203,45 @@ export class MemStorage implements IStorage {
     this.profiles.set(id, { ...p, allowExternalView: !!allowExternalView });
     this.save();
     return { ok: true as const };
+  }
+
+  async listLessonCompletions(studentUsername: string): Promise<LessonCompletion[]> {
+    const entry = this.findUserEntryByUsername(studentUsername);
+    if (!entry) return [];
+    const [id] = entry;
+    if (this.roles.get(id) !== 'student') return [];
+    return Array.from(this.lessonCompletions.values()).filter(lc => lc.studentUserId === id);
+  }
+
+  async completeLesson(studentUsername: string, input: { moduleId: string; moduleTitle: string; lessonId: string; lessonTitle: string; points: number }) {
+    const entry = this.findUserEntryByUsername(studentUsername);
+    if (!entry) return { ok: false as const, error: 'User not found' };
+    const [id] = entry;
+    if (this.roles.get(id) !== 'student') return { ok: false as const, error: 'Not a student' };
+    const moduleId = String(input.moduleId || '').trim();
+    const lessonId = String(input.lessonId || '').trim();
+    const moduleTitle = String(input.moduleTitle || '').trim();
+    const lessonTitle = String(input.lessonTitle || '').trim();
+    const points = Number(input.points || 0);
+    if (!moduleId || !lessonId || !moduleTitle || !lessonTitle) return { ok: false as const, error: 'Missing lesson details' };
+    if (!Number.isFinite(points) || points <= 0) return { ok: false as const, error: 'Invalid points' };
+
+    const existing = Array.from(this.lessonCompletions.values()).find(lc => lc.studentUserId === id && lc.moduleId === moduleId && lc.lessonId === lessonId);
+    if (existing) return { ok: true as const, completion: existing, alreadyCompleted: true as const };
+
+    const completion: LessonCompletion = {
+      id: randomUUID(),
+      studentUserId: id,
+      moduleId,
+      moduleTitle,
+      lessonId,
+      lessonTitle,
+      points: Math.floor(points),
+      completedAt: Date.now(),
+    };
+    this.lessonCompletions.set(completion.id, completion);
+    this.save();
+    return { ok: true as const, completion, alreadyCompleted: false as const };
   }
 
   // Admin accounts
@@ -2388,7 +2461,7 @@ export type StudentProfileView = {
 
 // Timeline
 export type TimelineItem = {
-  kind: 'task' | 'quiz' | 'game';
+  kind: 'task' | 'quiz' | 'game' | 'lesson';
   when: number;
   title: string;
   // optional enrichments
@@ -2396,6 +2469,20 @@ export type TimelineItem = {
   points?: number; // task or quiz points
   scorePercent?: number; // quiz
   lastPlayedAt?: number; // game
+  moduleId?: string;
+  lessonId?: string;
+};
+
+// Learning completions
+export type LessonCompletion = {
+  id: string;
+  studentUserId: string;
+  moduleId: string;
+  moduleTitle: string;
+  lessonId: string;
+  lessonTitle: string;
+  points: number;
+  completedAt: number;
 };
 
 // Weekly streak (Mon..Sun)

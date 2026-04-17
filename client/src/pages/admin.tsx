@@ -1,7 +1,12 @@
 import { useAuth } from "@/lib/auth";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Upload, Youtube, Video, Plus, Trash2, Edit3, Globe } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { 
+  LogOut, Settings, Users, CheckCircle, AlertCircle, Zap, Plus, Trash2, 
+  Edit3, Eye, Shield, BarChart3, Gamepad2, BookOpen, Video, Globe, 
+  Megaphone, Clipboard, Youtube, Upload
+} from "lucide-react";
 
 export default function AdminPortal() {
   const { role, clear } = useAuth();
@@ -10,19 +15,19 @@ export default function AdminPortal() {
   const [resetting, setResetting] = useState<string | null>(null);
   const [selectedUser, setSelectedUser] = useState<any | null>(null);
   const [loadingDetails, setLoadingDetails] = useState(false);
-  // Tabs must be declared before any early returns to keep hooks order stable
   const [tab, setTab] = useState(0);
+  
   const tabNames = [
-    'Approval List',
-    'Manage Admin Accounts',
-    'Manage All Accounts',
-    'Challenges & Games',
-    'Quizzes Management',
-    'Videos Management',
-    'Schools & Colleges',
-    'Global Quizzes',
-    'Global Announcements',
-    'Global Assignments',
+    { name: 'Approval List', icon: CheckCircle },
+    { name: 'Admin Accounts', icon: Shield },
+    { name: 'All Accounts', icon: Users },
+    { name: 'Challenges & Games', icon: Gamepad2 },
+    { name: 'Quizzes', icon: BookOpen },
+    { name: 'Videos', icon: Video },
+    { name: 'Schools', icon: Globe },
+    { name: 'Global Quizzes', icon: BarChart3 },
+    { name: 'Announcements', icon: Megaphone },
+    { name: 'Assignments', icon: Clipboard },
   ];
 
   const load = async () => {
@@ -53,16 +58,16 @@ export default function AdminPortal() {
   };
 
   const approveAll = async () => {
+    if (!confirm('Approve all pending applications?')) return;
     await fetch('/api/admin/approve-all', { method: 'POST' });
     await load();
     await loadUsers();
   };
 
   const resetPassword = async (username: string, password?: string) => {
-    // Ask for a custom password if not provided
     const pwd = password ?? prompt(`Set new password for @${username}`, '') ?? '';
     const finalPwd = pwd.trim();
-    if (!finalPwd) return; // cancelled
+    if (!finalPwd) return;
     setResetting(username);
     await fetch('/api/admin/reset-password', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username, password: finalPwd }) });
     setResetting(null);
@@ -99,200 +104,304 @@ export default function AdminPortal() {
       setLoadingDetails(false);
     }
   };
+
   if (role !== 'admin') {
     return (
-      <div 
-        className="min-h-screen text-white p-6 flex flex-col items-center justify-center relative"
-        style={{
-          backgroundImage: 'url(/api/image/360_F_628835191_EMMgdwXxjtd3yLBUguiz5UrxaxqByvUc.jpg)',
-          backgroundSize: 'cover',
-          backgroundPosition: 'center',
-          backgroundRepeat: 'no-repeat'
-        }}
-      >
-        <div className="absolute inset-0 bg-black/50"></div>
-        <div className="relative z-10 bg-white/10 backdrop-blur-xl border border-white/20 shadow-xl rounded-xl p-8 text-center">
-          <h1 className="text-3xl font-bold mb-4 text-white/90">Admin Portal</h1>
-          <p className="text-white/70">Access denied. Please log in as an admin.</p>
+      <div className="min-h-screen bg-gradient-to-br from-slate-950 via-emerald-950 to-slate-900 text-white flex items-center justify-center p-6">
+        <div className="absolute inset-0 overflow-hidden pointer-events-none">
+          <div className="absolute top-20 left-20 w-72 h-72 bg-emerald-500/10 rounded-full blur-3xl animate-pulse"></div>
+          <div className="absolute bottom-20 right-20 w-96 h-96 bg-red-500/10 rounded-full blur-3xl animate-pulse delay-1000"></div>
+        </div>
+        <div className="relative z-10 bg-white/10 backdrop-blur-xl border border-white/20 rounded-2xl p-8 text-center max-w-md">
+          <AlertCircle className="w-12 h-12 mx-auto mb-4 text-red-400" />
+          <h1 className="text-3xl font-bold mb-2">Access Denied</h1>
+          <p className="text-white/70 mb-6">You don't have permission to access the admin portal.</p>
+          <Button onClick={clear} className="bg-white/20 hover:bg-white/30 text-white border border-white/30">
+            Return to Login
+          </Button>
         </div>
       </div>
     );
   }
 
   return (
-    <div 
-      className="min-h-screen text-white p-6 relative"
-      style={{
-        backgroundImage: 'url(/api/image/360_F_628835191_EMMgdwXxjtd3yLBUguiz5UrxaxqByvUc.jpg)',
-        backgroundSize: 'cover',
-        backgroundPosition: 'center',
-        backgroundRepeat: 'no-repeat'
-      }}
-    >
-      <div className="absolute inset-0 bg-black/50"></div>
-      <div className="relative z-10">
-        <div className="bg-white/10 backdrop-blur-xl border border-white/20 shadow-xl rounded-xl p-6 mb-6">
-          <div className="flex items-center justify-between">
+    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-emerald-950 to-slate-900 text-white relative overflow-hidden">
+      {/* Animated Background */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none">
+        <div className="absolute top-20 left-20 w-72 h-72 bg-emerald-500/10 rounded-full blur-3xl animate-pulse"></div>
+        <div className="absolute bottom-20 right-20 w-96 h-96 bg-cyan-500/10 rounded-full blur-3xl animate-pulse delay-1000"></div>
+        <div className="absolute top-1/2 left-1/2 w-80 h-80 bg-yellow-500/5 rounded-full blur-3xl animate-pulse delay-500"></div>
+      </div>
+
+      <div className="relative z-10 p-4 lg:p-6 max-w-7xl mx-auto">
+        {/* Header */}
+        <div className="mb-6">
+          <div className="flex items-center justify-between gap-4 mb-4">
             <div>
-              <h1 className="text-3xl font-bold text-white/90">Admin Portal</h1>
-              <p className="text-white/70 mt-1">System administration and management</p>
+              <div className="flex items-center gap-3 mb-2">
+                <div className="p-3 bg-gradient-to-r from-emerald-500/20 to-cyan-500/20 rounded-lg border border-emerald-400/30">
+                  <Shield className="w-6 h-6 text-emerald-300" />
+                </div>
+                <h1 className="text-4xl font-bold bg-gradient-to-r from-emerald-400 to-cyan-400 bg-clip-text text-transparent">Admin Portal</h1>
+              </div>
+              <p className="text-white/60 ml-15">Manage users, content, and system settings</p>
             </div>
             <Button 
-              variant="secondary" 
               onClick={clear}
-              className="bg-white/20 hover:bg-white/30 text-white border-white/30"
+              className="bg-gradient-to-r from-red-500/20 to-pink-500/20 hover:from-red-500/30 hover:to-pink-500/30 border border-red-400/30 text-red-300 hover:text-red-200"
             >
+              <LogOut className="w-4 h-4 mr-2" />
               Logout
             </Button>
           </div>
         </div>
-        <div className="flex flex-wrap gap-2 mb-6">
-          {tabNames.map((name, i) => (
-            <Button 
-              key={name} 
-              variant={tab === i ? 'default' : 'secondary'} 
-              onClick={() => setTab(i)}
-              className={tab === i ? "bg-white/20 text-white" : "bg-white/10 hover:bg-white/20 text-white border-white/30"}
-            >
-              {name}
-            </Button>
-          ))}
-        </div>
 
-      {tab === 0 && (
-        <div className="bg-white/10 backdrop-blur-xl border border-white/20 shadow-xl rounded-xl p-6">
-          <h2 className="text-xl font-semibold mb-4 text-white/90">Approval List</h2>
-          <Button 
-            className="bg-orange-600 hover:bg-orange-700 text-white mb-4" 
-            onClick={approveAll}
-          >
-            Approve All Pending
-          </Button>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <section>
-              <h3 className="text-lg font-semibold mb-3 text-white/90">Pending Students</h3>
-              <div className="space-y-3">
-                {pending.students.length === 0 && <p className="text-white/70">No pending students.</p>}
-                {pending.students.map((s) => (
-                  <div key={s.id} className="p-4 rounded-lg bg-white/20 backdrop-blur-sm border border-white/30">
-                    <div className="font-medium text-white/90">{s.name} (@{s.username})</div>
-                    <div className="text-sm text-white/70">{s.email}</div>
-                    <div className="text-xs text-earth-muted mt-1">School: {s.schoolId} • Student ID: {s.studentId} • Roll: {s.rollNumber || '-'} • Class: {s.className || '-'} • Section: {s.section || '-'}</div>
-                    <Button className="mt-2 bg-earth-orange hover:bg-earth-orange-hover" onClick={() => approve('student', s.id)}>Approve</Button>
-                  </div>
-                ))}
-              </div>
-            </section>
-            <section>
-              <h3 className="text-lg font-semibold mb-2">Pending Teachers</h3>
-              <div className="space-y-3">
-                {pending.teachers.length === 0 && <p className="text-earth-muted">No pending teachers.</p>}
-                {pending.teachers.map((t) => (
-                  <div key={t.id} className="p-3 rounded-lg bg-[var(--earth-card)] border border-[var(--earth-border)]">
-                    <div className="font-medium">{t.name} (@{t.username})</div>
-                    <div className="text-sm text-earth-muted">{t.email}</div>
-                    <div className="text-xs text-earth-muted mt-1">School: {t.schoolId} • Teacher ID: {t.teacherId} • Subject: {t.subject || '-'}</div>
-                    <Button className="mt-2 bg-earth-orange hover:bg-earth-orange-hover" onClick={() => approve('teacher', t.id)}>Approve</Button>
-                  </div>
-                ))}
-              </div>
-            </section>
+        {/* Tab Navigation */}
+        <div className="mb-6 overflow-x-auto">
+          <div className="flex gap-2 pb-2">
+            {tabNames.map((tab_item, i) => {
+              const Icon = tab_item.icon;
+              return (
+                <button
+                  key={tab_item.name}
+                  onClick={() => setTab(i)}
+                  className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-all duration-300 whitespace-nowrap ${
+                    tab === i
+                      ? "bg-gradient-to-r from-emerald-500/30 to-cyan-500/30 border border-emerald-400/50 text-white"
+                      : "bg-white/10 hover:bg-white/20 border border-white/10 text-white/70 hover:text-white"
+                  }`}
+                >
+                  <Icon className="w-4 h-4" />
+                  <span className="text-sm font-medium">{tab_item.name}</span>
+                </button>
+              );
+            })}
           </div>
         </div>
-      )}
 
-      {tab === 1 && (
-        <AdminAccounts />
-      )}
-
-      {tab === 2 && (
-        <div>
-          <h2 className="text-xl font-semibold mb-3">Manage All Accounts</h2>
-          <div className="space-y-2">
-            {users.length === 0 && <p className="text-earth-muted">No users yet.</p>}
-            {users.map(u => (
-              <div key={u.username} className="flex items-center justify-between p-3 rounded-lg bg-[var(--earth-card)] border border-[var(--earth-border)]">
-                <div className="cursor-pointer" onClick={() => openDetails(u.username)} title="View details">
-                  <div className="font-medium">@{u.username}</div>
-                  <div className="text-xs text-earth-muted">Role: {u.role}</div>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Button variant="secondary" onClick={() => openDetails(u.username)}>View Profile</Button>
-                  <Button variant="secondary" onClick={() => navigator.clipboard?.writeText(u.username)}>Copy Username</Button>
-                  <Button className="bg-earth-orange hover:bg-earth-orange-hover" onClick={() => resetPassword(u.username)} disabled={resetting === u.username}>
-                    {resetting === u.username ? 'Saving…' : 'Set Custom Password'}
-                  </Button>
-                  {u.role !== 'admin' && (
-                    <Button className="bg-red-600 hover:bg-red-700" onClick={() => unapprove(u.username)}>
-                      Move to Pending
-                    </Button>
-                  )}
-                </div>
+        {/* Content Area */}
+        <div className="bg-white/10 backdrop-blur-xl border border-white/20 rounded-2xl p-6 md:p-8">
+          {/* Approval List Tab */}
+          {tab === 0 && (
+            <div className="space-y-6">
+              <div className="flex items-center justify-between">
+                <h2 className="text-2xl font-bold">Application Approvals</h2>
+                <Badge className="bg-emerald-500/20 text-emerald-300 border-emerald-400/30">
+                  {pending.students.length + pending.teachers.length} Pending
+                </Badge>
               </div>
-            ))}
-          </div>
-          {selectedUser && (
-            <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-50" onClick={() => setSelectedUser(null)}>
-              <div className="max-w-lg w-full rounded-lg bg-[var(--earth-card)] border border-[var(--earth-border)] p-4" onClick={(e) => e.stopPropagation()}>
-                <div className="flex items-center justify-between mb-2">
-                  <h3 className="text-lg font-semibold">@{selectedUser.username || selectedUser.name || 'User'} Details</h3>
-                  <Button variant="secondary" onClick={() => setSelectedUser(null)}>Close</Button>
-                </div>
-        {loadingDetails ? (
-                  <div className="text-earth-muted">Loading…</div>
-                ) : (
-                  <div className="space-y-1 text-sm">
-          <div><span className="text-earth-muted">Status:</span> {selectedUser.status}</div>
-          <div><span className="text-earth-muted">Username:</span> {selectedUser.username}</div>
-                    {selectedUser.role && <div><span className="text-earth-muted">Role:</span> {selectedUser.role}</div>}
-          {selectedUser.password && <div><span className="text-earth-muted">Password:</span> {selectedUser.password}</div>}
-                    {selectedUser.name && <div><span className="text-earth-muted">Name:</span> {selectedUser.name}</div>}
-                    {selectedUser.email && <div><span className="text-earth-muted">Email:</span> {selectedUser.email}</div>}
-                    {selectedUser.schoolId && <div><span className="text-earth-muted">School:</span> {selectedUser.schoolId}</div>}
-                    {selectedUser.studentId && <div><span className="text-earth-muted">Student ID:</span> {selectedUser.studentId}</div>}
-                    {selectedUser.teacherId && <div><span className="text-earth-muted">Teacher ID:</span> {selectedUser.teacherId}</div>}
-                    {selectedUser.subject && <div><span className="text-earth-muted">Subject:</span> {selectedUser.subject}</div>}
-                    {selectedUser.rollNumber && <div><span className="text-earth-muted">Roll No:</span> {selectedUser.rollNumber}</div>}
-                    {selectedUser.className && <div><span className="text-earth-muted">Class/Year:</span> {selectedUser.className}</div>}
-                    {selectedUser.section && <div><span className="text-earth-muted">Section:</span> {selectedUser.section}</div>}
-                    {selectedUser.photoDataUrl && (
-                      <div className="pt-2">
-                        <img src={selectedUser.photoDataUrl} alt="Profile" className="h-20 w-20 object-cover rounded-full" />
-                      </div>
+              
+              <Button 
+                onClick={approveAll}
+                className="bg-gradient-to-r from-emerald-500 to-cyan-500 hover:from-emerald-600 hover:to-cyan-600 text-white font-semibold"
+              >
+                <CheckCircle className="w-4 h-4 mr-2" />
+                Approve All Pending
+              </Button>
+
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                {/* Students Section */}
+                <div className="bg-white/5 border border-white/10 rounded-lg p-4">
+                  <h3 className="text-base font-semibold mb-3 flex items-center gap-2">
+                    <Users className="w-5 h-5 text-blue-400" />
+                    Pending Students
+                    <Badge className="bg-blue-500/20 text-blue-300">{pending.students.length}</Badge>
+                  </h3>
+                  <div className="space-y-2">
+                    {pending.students.length === 0 ? (
+                      <p className="text-white/50 text-center py-3">No pending students</p>
+                    ) : (
+                      pending.students.map((s) => (
+                        <div key={s.id} className="bg-white/5 border border-white/10 rounded-lg p-4 hover:bg-white/10 transition-all duration-200">
+                          <div className="flex items-start justify-between gap-3 mb-2">
+                            <div className="flex-1">
+                              <p className="font-semibold text-white">{s.name}</p>
+                              <p className="text-sm text-white/60">@{s.username}</p>
+                              <p className="text-xs text-white/40 mt-1">{s.email}</p>
+                            </div>
+                            <Badge className="bg-blue-500/20 text-blue-300 border-blue-400/30">Student</Badge>
+                          </div>
+                          <div className="text-xs text-white/40 mb-3 space-y-1">
+                            <p>ID: {s.studentId} | Roll: {s.rollNumber || '-'} | Class: {s.className || '-'}</p>
+                            <p>School: {s.schoolId}</p>
+                          </div>
+                          <Button 
+                            size="sm"
+                            onClick={() => approve('student', s.id)}
+                            className="w-full bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-400/30"
+                          >
+                            <CheckCircle className="w-4 h-4 mr-2" />
+                            Approve
+                          </Button>
+                        </div>
+                      ))
                     )}
                   </div>
-                )}
+                </div>
+
+                {/* Teachers Section */}
+                <div className="bg-white/5 border border-white/10 rounded-lg p-4">
+                  <h3 className="text-base font-semibold mb-3 flex items-center gap-2">
+                    <Users className="w-5 h-5 text-orange-400" />
+                    Pending Teachers
+                    <Badge className="bg-orange-500/20 text-orange-300">{pending.teachers.length}</Badge>
+                  </h3>
+                  <div className="space-y-2">
+                    {pending.teachers.length === 0 ? (
+                      <p className="text-white/50 text-center py-3">No pending teachers</p>
+                    ) : (
+                      pending.teachers.map((t) => (
+                        <div key={t.id} className="bg-white/5 border border-white/10 rounded-lg p-3 hover:bg-white/10 transition-all duration-200">
+                          <div className="flex items-start justify-between gap-2 mb-2">
+                            <div className="flex-1">
+                              <p className="font-semibold text-white text-sm">{t.name}</p>
+                              <p className="text-xs text-white/60">@{t.username}</p>
+                              <p className="text-xs text-white/40 mt-0.5">{t.email}</p>
+                            </div>
+                            <Badge className="bg-orange-500/20 text-orange-300 border-orange-400/30">Teacher</Badge>
+                          </div>
+                          <div className="text-xs text-white/40 mb-2 space-y-0.5">
+                            <p>Teacher ID: {t.teacherId} | Subject: {t.subject || '-'}</p>
+                            <p>School: {t.schoolId}</p>
+                          </div>
+                          <Button 
+                            size="sm"
+                            onClick={() => approve('teacher', t.id)}
+                            className="w-full bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-400/30"
+                          >
+                            <CheckCircle className="w-4 h-4 mr-2" />
+                            Approve
+                          </Button>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
               </div>
             </div>
           )}
+
+          {/* Manage All Accounts Tab */}
+          {tab === 2 && (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <h2 className="text-xl font-bold">All Accounts</h2>
+                <Badge className="bg-emerald-500/20 text-emerald-300 border-emerald-400/30">
+                  {users.length} Total
+                </Badge>
+              </div>
+
+              {users.length === 0 ? (
+                <div className="text-center py-12">
+                  <Users className="w-12 h-12 text-white/30 mx-auto mb-4" />
+                  <p className="text-white/50">No users found</p>
+                </div>
+              ) : (
+                <div className="space-y-3 max-h-[600px] overflow-y-auto">
+                  {users.map(u => (
+                    <div key={u.username} className="bg-white/5 border border-white/10 rounded-lg p-4 hover:bg-white/10 transition-all duration-200">
+                      <div className="flex items-center justify-between gap-4 flex-wrap">
+                        <div className="flex-1 min-w-[200px]">
+                          <p className="font-semibold text-white">@{u.username}</p>
+                          <div className="flex gap-2 mt-2">
+                            <Badge className={`${
+                              u.role === 'admin' ? 'bg-red-500/20 text-red-300 border-red-400/30' :
+                              u.role === 'teacher' ? 'bg-orange-500/20 text-orange-300 border-orange-400/30' :
+                              'bg-blue-500/20 text-blue-300 border-blue-400/30'
+                            }`}>
+                              {u.role}
+                            </Badge>
+                          </div>
+                        </div>
+                        <div className="flex gap-2 flex-wrap justify-end">
+                          <Button 
+                            size="sm"
+                            onClick={() => openDetails(u.username)}
+                            className="bg-white/10 hover:bg-white/20 text-white border border-white/20"
+                          >
+                            <Eye className="w-4 h-4 mr-1" />
+                            View
+                          </Button>
+                          <Button 
+                            size="sm"
+                            onClick={() => navigator.clipboard?.writeText(u.username)}
+                            className="bg-white/10 hover:bg-white/20 text-white border border-white/20"
+                          >
+                            Copy
+                          </Button>
+                          <Button 
+                            size="sm"
+                            onClick={() => resetPassword(u.username)}
+                            disabled={resetting === u.username}
+                            className="bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-400/30"
+                          >
+                            {resetting === u.username ? 'Saving…' : 'Reset Password'}
+                          </Button>
+                          {u.role !== 'admin' && (
+                            <Button 
+                              size="sm"
+                              onClick={() => unapprove(u.username)}
+                              className="bg-red-500/20 hover:bg-red-500/30 text-red-300 border border-red-400/30"
+                            >
+                              To Pending
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* User Details Modal */}
+          {selectedUser && (
+            <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50" onClick={() => setSelectedUser(null)}>
+              <div className="bg-gradient-to-br from-emerald-900/40 to-cyan-900/40 border border-white/20 rounded-xl p-6 max-w-lg w-full" onClick={(e) => e.stopPropagation()}>
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-2xl font-bold">@{selectedUser.username || selectedUser.name || 'User'}</h3>
+                  <Button variant="ghost" onClick={() => setSelectedUser(null)} className="text-white/60 hover:text-white">✕</Button>
+                </div>
+                
+                {loadingDetails ? (
+                  <p className="text-white/50">Loading…</p>
+                ) : (
+                  <div className="space-y-2 max-h-[500px] overflow-y-auto">
+                    {selectedUser.photoDataUrl && (
+                      <img src={selectedUser.photoDataUrl} alt="Profile" className="h-24 w-24 object-cover rounded-full border-2 border-white/20 mb-4" />
+                    )}
+                    <p><span className="text-white/60">Status:</span> <Badge className="ml-2 bg-emerald-500/20 text-emerald-300">{selectedUser.status}</Badge></p>
+                    {selectedUser.name && <p><span className="text-white/60">Name:</span> <span className="text-white ml-2">{selectedUser.name}</span></p>}
+                    {selectedUser.email && <p><span className="text-white/60">Email:</span> <span className="text-white ml-2">{selectedUser.email}</span></p>}
+                    {selectedUser.role && <p><span className="text-white/60">Role:</span> <span className="text-white ml-2">{selectedUser.role}</span></p>}
+                    {selectedUser.studentId && <p><span className="text-white/60">Student ID:</span> <span className="text-white ml-2">{selectedUser.studentId}</span></p>}
+                    {selectedUser.teacherId && <p><span className="text-white/60">Teacher ID:</span> <span className="text-white ml-2">{selectedUser.teacherId}</span></p>}
+                    {selectedUser.schoolId && <p><span className="text-white/60">School:</span> <span className="text-white ml-2">{selectedUser.schoolId}</span></p>}
+                    {selectedUser.subject && <p><span className="text-white/60">Subject:</span> <span className="text-white ml-2">{selectedUser.subject}</span></p>}
+                    {selectedUser.rollNumber && <p><span className="text-white/60">Roll No:</span> <span className="text-white ml-2">{selectedUser.rollNumber}</span></p>}
+                    {selectedUser.className && <p><span className="text-white/60">Class:</span> <span className="text-white ml-2">{selectedUser.className}</span></p>}
+                    {selectedUser.section && <p><span className="text-white/60">Section:</span> <span className="text-white ml-2">{selectedUser.section}</span></p>}
+                  </div>
+                )}
+                
+                <Button onClick={() => setSelectedUser(null)} className="w-full mt-4 bg-white/10 hover:bg-white/20 text-white border border-white/20">
+                  Close
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {/* Manager Tabs */}
+          {tab === 1 && <AdminAccounts />}
+          {tab === 3 && <AdminGamesManager />}
+          {tab === 4 && <AdminQuizManager />}
+          {tab === 5 && <AdminVideosManager />}
+          {tab === 6 && <SchoolsManager />}
+          {tab === 7 && <GlobalQuizzes />}
+          {tab === 8 && <GlobalAnnouncements />}
+          {tab === 9 && <GlobalAssignments />}
         </div>
-      )}
-
-      {tab === 3 && (
-        <AdminGamesManager />
-      )}
-
-      {tab === 4 && (
-        <AdminQuizManager />
-      )}
-
-      {tab === 5 && (
-        <AdminVideosManager />
-      )}
-
-      {tab === 6 && (
-        <SchoolsManager />
-      )}
-
-      {tab === 7 && (
-        <GlobalQuizzes />
-      )}
-      {tab === 8 && (
-        <GlobalAnnouncements />
-      )}
-      {tab === 9 && (
-        <GlobalAssignments />
-      )}
       </div>
     </div>
   );

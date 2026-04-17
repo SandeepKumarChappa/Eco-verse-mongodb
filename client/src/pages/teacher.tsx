@@ -1,9 +1,13 @@
 import { useAuth } from "@/lib/auth";
 import { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Upload, Youtube, Video, Plus, Trash2, Edit3, Globe } from "lucide-react";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription, DialogFooter } from "@/components/ui/dialog";
+import { Upload, Youtube, Video, Plus, Trash2, Edit3, Bell, BarChart3, Users, FileText, BookOpen, Brain, Zap, LogOut } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
 
-// Fallback images for different environmental topics
+const tabs = ["Overview", "Tasks", "Quizzes", "Assignments", "Videos", "Students", "Announcements", "Profile"];
+
 const FALLBACK_IMAGES: Record<string, string> = {
   'Green Living': '/api/image/nature-319.jpg',
   'Forest Conservation': '/api/image/beautiful-morning-view-indonesia-panorama-landscape-paddy-fields-with-beauty-color-and-sky-natural-light-photo.jpg',
@@ -19,60 +23,14 @@ const FALLBACK_IMAGES: Record<string, string> = {
   'General': '/api/image/1080p-nature-background-nfkrrkh7da3eonyn.jpg'
 };
 
-// Function to get appropriate fallback image based on video category or title keywords
 const getFallbackImage = (category: string, title: string): string => {
-  // Direct category match
-  if (FALLBACK_IMAGES[category]) {
-    return FALLBACK_IMAGES[category];
-  }
-  
-  // Title-based matching for better context
+  if (FALLBACK_IMAGES[category]) return FALLBACK_IMAGES[category];
   const titleLower = title.toLowerCase();
-  if (titleLower.includes('ocean') || titleLower.includes('marine') || titleLower.includes('sea')) {
-    return FALLBACK_IMAGES['Marine Life'];
-  }
-  if (titleLower.includes('forest') || titleLower.includes('tree') || titleLower.includes('deforestation')) {
-    return FALLBACK_IMAGES['Forest Conservation'];
-  }
-  if (titleLower.includes('energy') || titleLower.includes('solar') || titleLower.includes('wind')) {
-    return FALLBACK_IMAGES['Renewable Energy'];
-  }
-  if (titleLower.includes('air') || titleLower.includes('pollution') || titleLower.includes('atmosphere')) {
-    return FALLBACK_IMAGES['Air Quality'];
-  }
-  if (titleLower.includes('water') || titleLower.includes('rain') || titleLower.includes('river')) {
-    return FALLBACK_IMAGES['Water Conservation'];
-  }
-  if (titleLower.includes('waste') || titleLower.includes('recycle') || titleLower.includes('garbage')) {
-    return FALLBACK_IMAGES['Waste Management'];
-  }
-  if (titleLower.includes('climate') || titleLower.includes('global warming') || titleLower.includes('greenhouse')) {
-    return FALLBACK_IMAGES['Climate Change'];
-  }
-  if (titleLower.includes('farming') || titleLower.includes('agriculture') || titleLower.includes('food')) {
-    return FALLBACK_IMAGES['Agriculture'];
-  }
-  if (titleLower.includes('transport') || titleLower.includes('electric') || titleLower.includes('vehicle')) {
-    return FALLBACK_IMAGES['Transportation'];
-  }
-  if (titleLower.includes('eco') || titleLower.includes('green') || titleLower.includes('sustainable')) {
-    return FALLBACK_IMAGES['Green Living'];
-  }
-  
-  // Default fallback
+  if (titleLower.includes('ocean') || titleLower.includes('marine') || titleLower.includes('sea')) return FALLBACK_IMAGES['Marine Life'];
+  if (titleLower.includes('forest') || titleLower.includes('tree') || titleLower.includes('deforestation')) return FALLBACK_IMAGES['Forest Conservation'];
+  if (titleLower.includes('energy') || titleLower.includes('solar') || titleLower.includes('wind')) return FALLBACK_IMAGES['Renewable Energy'];
   return FALLBACK_IMAGES['General'];
 };
-
-const tabs = [
-  "Overview",
-  "Tasks",
-  "Quizzes",
-  "Assignments",
-  "Videos",
-  "Students",
-  "Announcements",
-  "Profile",
-];
 
 export default function TeacherAppShell() {
   const { role, username, clear } = useAuth();
@@ -91,78 +49,80 @@ export default function TeacherAppShell() {
   const [tab, setTab] = useState(initialTab);
 
   return (
-    <div 
-      className="min-h-screen text-white p-6 relative"
-      style={{
-        backgroundImage: 'url(/api/image/pngtree-cb-background-hd-2022-download-picsart-and-snapseed-photo-editing-picture-image_15546523.jpg)',
-        backgroundSize: 'cover',
-        backgroundPosition: 'center',
-        backgroundRepeat: 'no-repeat'
-      }}
-    >
-      {/* Overlay for better text visibility */}
-      <div className="absolute inset-0 bg-black/50"></div>
-      
-      {/* Content */}
-      <div className="relative z-10">
-        <div className="bg-white/10 backdrop-blur-xl border border-white/20 shadow-xl rounded-xl p-6 mb-6">
-          <div className="flex items-center justify-between">
+    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-purple-950 to-slate-900 text-white relative overflow-hidden">
+      <div className="absolute inset-0 overflow-hidden pointer-events-none">
+        <div className="absolute top-20 left-20 w-72 h-72 bg-purple-500/10 rounded-full blur-3xl animate-pulse"></div>
+        <div className="absolute bottom-20 right-20 w-96 h-96 bg-blue-500/10 rounded-full blur-3xl animate-pulse delay-1000"></div>
+        <div className="absolute top-1/2 left-1/2 w-80 h-80 bg-pink-500/5 rounded-full blur-3xl animate-pulse delay-500"></div>
+      </div>
+
+      <div className="relative z-10 p-6 lg:p-8 min-h-screen flex flex-col">
+        <motion.div
+          initial={{ opacity: 0, y: -20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5 }}
+          className="mb-8"
+        >
+          <div className="flex items-center justify-between mb-6">
             <div>
-              <h1 className="text-2xl md:text-3xl font-bold text-white/90">Teacher Portal</h1>
-              <p className="text-white/70 text-sm">Welcome, @{username}</p>
+              <h1 className="text-4xl font-bold bg-gradient-to-r from-purple-300 via-blue-300 to-pink-300 bg-clip-text text-transparent mb-2">
+                Teacher Dashboard
+              </h1>
+              <p className="text-white/70">Welcome, @{username}! Manage your courses and students</p>
             </div>
-            <div className="flex gap-2">
-              <Button 
-                variant="secondary" 
-                onClick={clear}
-                className="bg-white/20 hover:bg-white/30 text-white border-white/30"
-              >
-                Logout
-              </Button>
-            </div>
-          </div>
-        </div>
-
-        <div className="flex flex-wrap gap-2 mb-6">
-          {tabs.map((t, i) => (
-            <Button 
-              key={t} 
-              variant={tab === i ? "default" : "secondary"} 
-              onClick={() => setTab(i)}
-              className={tab === i ? "bg-white/20 text-white" : "bg-white/10 hover:bg-white/20 text-white border-white/30"}
+            <Button
+              onClick={clear}
+              size="sm"
+              className="bg-gradient-to-r from-red-500/20 to-red-600/20 hover:from-red-500/30 hover:to-red-600/30 border border-red-400/30 text-red-300"
             >
-              {t}
+              <LogOut className="w-4 h-4 mr-2" />
+              Logout
             </Button>
-          ))}
-        </div>
+          </div>
 
-        {tab === 0 && <Overview />}
-        {tab === 1 && <Tasks />}
-        {tab === 2 && <Quizzes />}
-        {tab === 3 && <Assignments />}
-        {tab === 4 && <TeacherVideosManager />}
-        {tab === 5 && <Students />}
-        {tab === 6 && <Announcements />}
-        {tab === 7 && <Profile />}
+          <div className="flex flex-wrap gap-2 pb-4">
+            {tabs.map((t, i) => (
+              <motion.button
+                key={t}
+                onClick={() => setTab(i)}
+                initial={{ opacity: 0, scale: 0.9 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ duration: 0.2, delay: i * 0.05 }}
+                className={`px-4 py-2 rounded-xl font-medium text-sm transition-all ${
+                  tab === i
+                    ? 'bg-gradient-to-r from-purple-500/30 to-blue-500/30 border border-purple-400/50 text-white shadow-lg shadow-purple-500/20'
+                    : 'bg-white/10 border border-white/20 text-white/70 hover:bg-white/15'
+                }`}
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+              >
+                {t}
+              </motion.button>
+            ))}
+          </div>
+        </motion.div>
+
+        <div className="flex-1 overflow-y-auto">
+          <AnimatePresence mode="wait">
+            {tab === 0 && <TeacherOverview key="overview" />}
+            {tab === 1 && <TeacherTasks key="tasks" />}
+            {tab === 2 && <TeacherQuizzes key="quizzes" />}
+            {tab === 3 && <TeacherAssignments key="assignments" />}
+            {tab === 4 && <TeacherVideosManager key="videos" />}
+            {tab === 5 && <TeacherStudents key="students" />}
+            {tab === 6 && <TeacherAnnouncements key="announcements" />}
+            {tab === 7 && <TeacherProfile key="profile" />}
+          </AnimatePresence>
+        </div>
       </div>
     </div>
   );
 }
 
-function Section({ title, children }: { title: string; children?: React.ReactNode }) {
-  return (
-    <section>
-      <h2 className="text-xl font-semibold mb-3 text-white/90">{title}</h2>
-      <div className="p-4 rounded-lg bg-white/10 backdrop-blur-xl border border-white/20 shadow-xl">
-        {children}
-      </div>
-    </section>
-  );
-}
-
-function Overview() {
+function TeacherOverview() {
   const { username } = useAuth();
   const [data, setData] = useState<any | null>(null);
+
   useEffect(() => {
     let mounted = true;
     fetch('/api/teacher/overview', { headers: { 'X-Username': username || '' } })
@@ -170,35 +130,69 @@ function Overview() {
       .then(d => { if (mounted) setData(d); });
     return () => { mounted = false; };
   }, [username]);
+
   return (
-    <Section title="Overview">
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: -20 }}
+      transition={{ duration: 0.5 }}
+      className="space-y-6"
+    >
       {!data ? (
-        <p className="text-earth-muted text-sm">Loading…</p>
+        <div className="text-center py-8">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white mx-auto"></div>
+          <p className="text-white/70 mt-4">Loading overview...</p>
+        </div>
       ) : (
-        <div className="grid grid-cols-2 md:grid-cols-3 gap-3 text-sm">
-          <div className="p-3 rounded-lg bg-[var(--earth-card)] border border-[var(--earth-border)]">Tasks: <b>{data.tasks}</b></div>
-          <div className="p-3 rounded-lg bg-[var(--earth-card)] border border-[var(--earth-border)]">Assignments: <b>{data.assignments}</b></div>
-          <div className="p-3 rounded-lg bg-[var(--earth-card)] border border-[var(--earth-border)]">Quizzes: <b>{data.quizzes}</b></div>
-          <div className="p-3 rounded-lg bg-[var(--earth-card)] border border-[var(--earth-border)]">Announcements: <b>{data.announcements}</b></div>
-          <div className="p-3 rounded-lg bg-[var(--earth-card)] border border-[var(--earth-border)]">Students: <b>{data.students}</b></div>
-          <div className="p-3 rounded-lg bg-[var(--earth-card)] border border-[var(--earth-border)]">Pending Submissions: <b>{data.pendingSubmissions}</b></div>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {[
+            { label: 'Tasks Created', value: data.tasks, icon: FileText, color: 'from-blue-500/20 to-cyan-500/20', iconColor: 'text-blue-400', borderColor: 'border-blue-400/30' },
+            { label: 'Quizzes Created', value: data.quizzes, icon: Brain, color: 'from-purple-500/20 to-pink-500/20', iconColor: 'text-purple-400', borderColor: 'border-purple-400/30' },
+            { label: 'Assignments', value: data.assignments, icon: BookOpen, color: 'from-emerald-500/20 to-green-500/20', iconColor: 'text-emerald-400', borderColor: 'border-emerald-400/30' },
+            { label: 'Videos', value: data.videos, icon: Video, color: 'from-pink-500/20 to-rose-500/20', iconColor: 'text-pink-400', borderColor: 'border-pink-400/30' },
+            { label: 'Total Students', value: data.students, icon: Users, color: 'from-cyan-500/20 to-blue-500/20', iconColor: 'text-cyan-400', borderColor: 'border-cyan-400/30' },
+            { label: 'Pending Reviews', value: data.pendingSubmissions, icon: Zap, color: 'from-yellow-500/20 to-orange-500/20', iconColor: 'text-yellow-400', borderColor: 'border-yellow-400/30' },
+          ].map((stat, idx) => {
+            const Icon = stat.icon;
+            return (
+              <motion.div
+                key={stat.label}
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.5, delay: idx * 0.1 }}
+                className={`bg-gradient-to-br ${stat.color} border ${stat.borderColor} rounded-2xl p-6 backdrop-blur-xl shadow-lg hover:shadow-xl transition-all`}
+                whileHover={{ scale: 1.05, y: -5 }}
+              >
+                <div className="flex items-start justify-between">
+                  <div>
+                    <p className="text-white/70 text-sm mb-2">{stat.label}</p>
+                    <p className="text-4xl font-bold text-white">{stat.value}</p>
+                  </div>
+                  <div className={`p-3 rounded-xl bg-white/10 ${stat.iconColor}`}>
+                    <Icon className="w-6 h-6" />
+                  </div>
+                </div>
+              </motion.div>
+            );
+          })}
         </div>
       )}
-    </Section>
+    </motion.div>
   );
 }
 
-function Tasks() {
+function TeacherTasks() {
   const { username } = useAuth();
-  const [loading, setLoading] = useState(false);
   const [tasks, setTasks] = useState<Array<any>>([]);
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [deadline, setDeadline] = useState("");
   const [maxPoints, setMaxPoints] = useState(10);
-  const [submissions, setSubmissions] = useState<Array<any>>([]);
   const [groupMode, setGroupMode] = useState<'solo' | 'group'>('solo');
   const [maxGroupSize, setMaxGroupSize] = useState(4);
+  const [loading, setLoading] = useState(false);
+  const [submissions, setSubmissions] = useState<Array<any>>([]);
   const [activeTaskId, setActiveTaskId] = useState<string | null>(null);
   const [activeTaskTitle, setActiveTaskTitle] = useState<string>("");
   const [subsLoading, setSubsLoading] = useState(false);
@@ -207,6 +201,7 @@ function Tasks() {
     const list = await fetch('/api/teacher/tasks', { headers: { 'X-Username': username || '' } }).then(r => r.json());
     setTasks(Array.isArray(list) ? list : []);
   };
+
   const loadSubs = async (taskId?: string) => {
     setSubsLoading(true);
     try {
@@ -217,6 +212,7 @@ function Tasks() {
       setSubsLoading(false);
     }
   };
+
   useEffect(() => { load(); loadSubs(); }, []);
 
   const create = async () => {
@@ -254,70 +250,105 @@ function Tasks() {
   };
 
   return (
-    <Section title="Tasks">
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: -20 }}
+      transition={{ duration: 0.5 }}
+      className="space-y-6"
+    >
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div>
-          <h3 className="font-semibold mb-2">Create Task</h3>
-          <div className="space-y-2">
-            <input className="w-full rounded-lg px-3 py-2 text-[var(--foreground)]" placeholder="Title" value={title} onChange={e => setTitle(e.target.value)} />
-            <textarea className="w-full rounded-lg px-3 py-2 text-[var(--foreground)]" placeholder="Description (optional)" value={description} onChange={e => setDescription(e.target.value)} />
-            <input className="w-full rounded-lg px-3 py-2 text-[var(--foreground)]" type="date" value={deadline} onChange={e => setDeadline(e.target.value)} />
-            <div className="flex items-center gap-2">
-              <span className="text-sm text-earth-muted">Max Points (1–10)</span>
-              <input className="w-24 rounded-lg px-3 py-2 text-[var(--foreground)]" type="number" min={1} value={maxPoints} onChange={e => setMaxPoints(Number(e.target.value))} />
+        <motion.div
+          initial={{ opacity: 0, scale: 0.95 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ duration: 0.5, delay: 0.1 }}
+          className="bg-gradient-to-br from-blue-500/20 to-cyan-500/20 border border-blue-400/30 rounded-2xl p-6 backdrop-blur-xl"
+        >
+          <h3 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
+            <Plus className="w-5 h-5 text-blue-400" />
+            Create New Task
+          </h3>
+          <div className="space-y-3">
+            <input className="w-full rounded-lg px-4 py-2 bg-white/10 border border-white/20 text-white placeholder-white/50" placeholder="Task Title" value={title} onChange={e => setTitle(e.target.value)} />
+            <textarea className="w-full rounded-lg px-4 py-2 bg-white/10 border border-white/20 text-white placeholder-white/50" placeholder="Description (optional)" value={description} onChange={e => setDescription(e.target.value)} rows={2} />
+            <div className="grid grid-cols-2 gap-3">
+              <input className="rounded-lg px-4 py-2 bg-white/10 border border-white/20 text-white" type="date" value={deadline} onChange={e => setDeadline(e.target.value)} />
+              <input className="rounded-lg px-4 py-2 bg-white/10 border border-white/20 text-white" type="number" min={1} max={10} value={maxPoints} onChange={e => setMaxPoints(Number(e.target.value))} placeholder="Max Points" />
             </div>
-            <div className="flex items-center gap-3">
-              <label className="text-sm text-earth-muted flex items-center gap-2">
-                <input type="checkbox" checked={groupMode === 'group'} onChange={e => setGroupMode(e.target.checked ? 'group' : 'solo')} /> Group task
+            <div className="space-y-2">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input type="checkbox" checked={groupMode === 'group'} onChange={e => setGroupMode(e.target.checked ? 'group' : 'solo')} className="cursor-pointer rounded" />
+                <span className="text-white/70 text-sm">Group Task</span>
               </label>
               {groupMode === 'group' && (
-                <>
-                  <span className="text-sm text-earth-muted">Max group size</span>
-                  <input className="w-20 rounded-lg px-3 py-2 text-[var(--foreground)]" type="number" min={2} max={10} value={maxGroupSize} onChange={e => setMaxGroupSize(Number(e.target.value))} />
-                </>
+                <div className="pl-6">
+                  <label className="block text-white/70 text-sm mb-2">Max Group Size</label>
+                  <input className="w-full rounded-lg px-4 py-2 bg-white/10 border border-white/20 text-white" type="number" min={2} max={10} value={maxGroupSize} onChange={e => setMaxGroupSize(Number(e.target.value))} />
+                </div>
               )}
             </div>
-            <Button className="bg-earth-orange hover:bg-earth-orange-hover" onClick={create} disabled={loading || !title.trim()}>
-              {loading ? 'Creating…' : 'Create Task'}
+            <Button onClick={create} disabled={loading} className="w-full bg-gradient-to-r from-blue-500 to-cyan-500 hover:from-blue-600 hover:to-cyan-600">
+              {loading ? 'Creating...' : 'Create Task'}
             </Button>
-          </div>
-          <h3 className="font-semibold mt-6 mb-2">Your Tasks</h3>
-          <div className="space-y-2">
             {tasks.length === 0 && (
-              <div className="space-y-2">
-                <p className="text-sm text-earth-muted">No tasks yet.</p>
-                <Button variant="secondary" onClick={seed} disabled={loading}>Seed 12 demo tasks</Button>
-              </div>
+              <Button variant="secondary" onClick={seed} disabled={loading} className="w-full bg-white/10 hover:bg-white/15">
+                Seed 12 Demo Tasks
+              </Button>
             )}
-            {tasks.map(t => (
-              <div key={t.id} className="p-3 rounded-lg bg-[var(--earth-card)] border border-[var(--earth-border)]">
-                <div className="font-medium">{t.title} <span className="text-xs text-earth-muted">• Max {t.maxPoints} pts</span></div>
-                {t.description && <div className="text-sm text-earth-muted">{t.description}</div>}
-                {t.deadline && <div className="text-xs text-earth-muted mt-1">Deadline: {t.deadline}</div>}
-                <div className="mt-2">
-                  <Button variant="secondary" onClick={() => { setActiveTaskId(t.id); setActiveTaskTitle(t.title); loadSubs(t.id); }}>View Submissions</Button>
-                </div>
-              </div>
-            ))}
           </div>
-        </div>
-        <div>
-          <h3 className="font-semibold mb-2">Submissions {activeTaskId ? <span className="text-earth-muted text-sm">for “{activeTaskTitle}”</span> : null}</h3>
-          {activeTaskId && (
-            <div className="mb-2">
-              <Button variant="secondary" onClick={() => { setActiveTaskId(null); setActiveTaskTitle(""); loadSubs(); }}>Show all submissions</Button>
-            </div>
-          )}
-          <div className="space-y-2">
-            {subsLoading && <p className="text-sm text-earth-muted">Loading…</p>}
-            {!subsLoading && submissions.length === 0 && <p className="text-sm text-earth-muted">{activeTaskId ? 'No submissions for this task yet.' : 'No submissions yet.'}</p>}
-            {submissions.map((s, idx) => (
-              <SubmissionCard key={s.id} s={s} onReview={review} />
+        </motion.div>
+
+        <div className="space-y-4">
+          <h3 className="text-xl font-bold text-white">Your Tasks ({tasks.length})</h3>
+          <div className="space-y-3 max-h-96 overflow-y-auto">
+            {tasks.map((t, idx) => (
+              <motion.div
+                key={t.id}
+                initial={{ opacity: 0, x: -20 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ duration: 0.3, delay: idx * 0.05 }}
+                className="bg-white/10 border border-white/20 rounded-xl p-4 backdrop-blur-xl hover:bg-white/15 transition-all cursor-pointer"
+                onClick={() => { setActiveTaskId(t.id); setActiveTaskTitle(t.title); loadSubs(t.id); }}
+              >
+                <h4 className="font-semibold text-white mb-2">{t.title}</h4>
+                {t.description && <p className="text-white/70 text-sm mb-2">{t.description}</p>}
+                <div className="flex items-center justify-between text-xs text-white/60">
+                  <span>📋 Max {t.maxPoints} pts</span>
+                  {t.deadline && <span>⏰ {t.deadline}</span>}
+                </div>
+              </motion.div>
             ))}
           </div>
         </div>
       </div>
-    </Section>
+
+      {activeTaskId && (
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5, delay: 0.2 }}
+          className="bg-white/10 border border-white/20 rounded-2xl p-6 backdrop-blur-xl"
+        >
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-xl font-bold text-white">Submissions for "{activeTaskTitle}"</h3>
+            <Button onClick={() => { setActiveTaskId(null); setActiveTaskTitle(""); loadSubs(); }} variant="secondary" size="sm">
+              Show All
+            </Button>
+          </div>
+          {subsLoading ? (
+            <p className="text-white/70">Loading...</p>
+          ) : submissions.length === 0 ? (
+            <p className="text-white/70">No submissions yet</p>
+          ) : (
+            <div className="space-y-3 max-h-96 overflow-y-auto">
+              {submissions.map((s) => (
+                <SubmissionCard key={s.id} s={s} onReview={review} />
+              ))}
+            </div>
+          )}
+        </motion.div>
+      )}
+    </motion.div>
   );
 }
 
@@ -330,193 +361,225 @@ function SubmissionCard({ s, onReview }: { s: any; onReview: (id: string, status
   const approved = s.status === 'approved';
   const rejected = s.status === 'rejected';
   const submitted = s.status === 'submitted';
+
   return (
-    <div className="p-3 rounded-lg bg-[var(--earth-card)] border border-[var(--earth-border)]">
-      <div className="flex items-start justify-between gap-2">
-        <div className="text-sm">
-          <div><span className="text-earth-muted">Student:</span> @{s.studentUsername} {s.studentName ? (<span className="text-earth-muted">• {s.studentName}</span>) : null}</div>
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      transition={{ duration: 0.3 }}
+      className="bg-white/5 border border-white/10 rounded-lg p-4"
+    >
+      <div className="flex items-start justify-between gap-4 mb-3">
+        <div className="text-sm flex-1">
+          <div className="text-white font-medium">@{s.studentUsername} {s.studentName && <span className="text-white/70">• {s.studentName}</span>}</div>
           {(s.className || s.section) && (
-            <div className="text-xs text-earth-muted">Class: {s.className || '-'} • Section: {s.section || '-'}</div>
+            <div className="text-xs text-white/60 mt-1">Class: {s.className || '-'} • Section: {s.section || '-'}</div>
           )}
-          <div className="text-xs text-earth-muted">Max {maxPts} pts</div>
-          <div className="text-sm mt-1"><span className="text-earth-muted">Status:</span> {s.status}{typeof s.points !== 'undefined' ? ` • ${s.points} pts` : ''}</div>
           {Array.isArray(s.groupMembers) && s.groupMembers.length > 0 && (
-            <div className="text-xs text-earth-muted">Group: {s.groupMembers.map((m:string)=>`@${m}`).join(', ')}</div>
+            <div className="text-xs text-white/60 mt-1">Group: {s.groupMembers.map((m: string) => `@${m}`).join(', ')}</div>
           )}
         </div>
-        <div className="text-xs text-earth-muted">{new Date(s.submittedAt).toLocaleString()}</div>
+        <div className="text-xs text-white/40">{new Date(s.submittedAt).toLocaleString()}</div>
       </div>
-      <div className="pt-2 flex gap-2 flex-wrap">
-        {Array.isArray(s.photos) && s.photos.length > 0 ? (
-          s.photos.map((p: string, i: number) => (
-            <img key={i} src={p} alt={`Submission ${i+1}`} className="h-24 w-24 object-cover rounded border border-[var(--earth-border)]" />
-          ))
-        ) : s.photoDataUrl ? (
-          <img src={s.photoDataUrl} alt="Submission" className="h-24 w-24 object-cover rounded border border-[var(--earth-border)]" />
-        ) : null}
-      </div>
-      <div className="mt-2 flex items-center gap-3">
-        <label className="text-sm text-earth-muted flex items-center gap-2">
-          Points
-          <input
-            className="w-24 rounded-lg px-3 py-2 text-[var(--foreground)]"
-            type="number"
-            min={0}
-            max={maxPts}
-            value={points}
-            onChange={e => setPoints(Number(e.target.value))}
-            disabled={approved}
-          />
-          <span className="text-xs">/ {maxPts}</span>
-        </label>
-      </div>
-      <div className="mt-2 flex gap-2">
+
+      {Array.isArray(s.photos) && s.photos.length > 0 ? (
+        <div className="flex gap-2 mb-3 flex-wrap">
+          {s.photos.map((p: string, i: number) => (
+            <img key={i} src={p} alt={`Submission ${i + 1}`} className="h-20 w-20 object-cover rounded border border-white/20" />
+          ))}
+        </div>
+      ) : s.photoDataUrl ? (
+        <div className="mb-3">
+          <img src={s.photoDataUrl} alt="Submission" className="h-20 w-20 object-cover rounded border border-white/20" />
+        </div>
+      ) : null}
+
+      <div className="flex items-end gap-3">
         {submitted && (
-          <Button className="bg-emerald-600 hover:bg-emerald-700" onClick={() => onReview(s.id, 'approved', points)}>Approve</Button>
+          <>
+            <div className="flex items-center gap-2">
+              <label className="text-sm text-white/70">Points:</label>
+              <input
+                className="w-16 rounded-lg px-2 py-1 bg-white/10 border border-white/20 text-white text-sm"
+                type="number"
+                min={0}
+                max={maxPts}
+                value={points}
+                onChange={e => setPoints(Number(e.target.value))}
+              />
+              <span className="text-xs text-white/70">/ {maxPts}</span>
+            </div>
+            <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700" onClick={() => onReview(s.id, 'approved', points)}>
+              Approve
+            </Button>
+            <Button size="sm" className="bg-red-600 hover:bg-red-700" onClick={() => onReview(s.id, 'rejected')}>
+              Reject
+            </Button>
+          </>
         )}
-        {submitted && (
-          <Button className="bg-red-600 hover:bg-red-700" onClick={() => onReview(s.id, 'rejected')}>Reject</Button>
-        )}
-        {approved && (
-          <span className="text-emerald-400 text-sm">Approved • {s.points} pts</span>
-        )}
-        {rejected && (
-          <span className="text-red-400 text-sm">Rejected</span>
-        )}
+        {approved && <span className="text-sm text-emerald-400 font-medium">✓ Approved • {s.points} pts</span>}
+        {rejected && <span className="text-sm text-red-400 font-medium">✗ Rejected</span>}
       </div>
-    </div>
+    </motion.div>
   );
 }
 
-function Quizzes() {
+function TeacherQuizzes() {
   const { username } = useAuth();
   const [list, setList] = useState<any[]>([]);
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [points, setPoints] = useState(3);
-  const [questions, setQuestions] = useState<Array<{ id?: string; text: string; options: string[]; answerIndex: number }>>([
-    { text: '', options: ['', ''], answerIndex: 0 },
-  ]);
+  const [questions, setQuestions] = useState<Array<{ id?: string; text: string; options: string[]; answerIndex: number }>>([{ text: '', options: ['', ''], answerIndex: 0 }]);
   const [editingQuizId, setEditingQuizId] = useState<string | null>(null);
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+  const [loading, setLoading] = useState(false);
+
   const load = async () => {
     const data = await fetch('/api/teacher/quizzes', { headers: { 'X-Username': username || '' } }).then(r => r.json());
     setList(Array.isArray(data) ? data : []);
   };
+
   useEffect(() => { load(); }, []);
 
-  const addQuestion = () => setQuestions(qs => [...qs, { text: '', options: ['', ''], answerIndex: 0 }]);
-  const addOption = (qi: number) => setQuestions(qs => qs.map((q,i)=> i===qi ? { ...q, options: q.options.length < 4 ? [...q.options, ''] : q.options } : q));
-  const updateQ = (qi: number, patch: Partial<{ id?: string; text: string; options: string[]; answerIndex: number }>) => setQuestions(qs => qs.map((q,i)=> i===qi ? { ...q, ...patch } : q));
-  const updateOpt = (qi: number, oi: number, val: string) => setQuestions(qs => qs.map((q,i)=> i===qi ? { ...q, options: q.options.map((o,j)=> j===oi ? val : o) } : q));
+  const reset = () => {
+    setTitle('');
+    setDescription('');
+    setPoints(3);
+    setQuestions([{ text: '', options: ['', ''], answerIndex: 0 }]);
+    setEditingQuizId(null);
+  };
 
-  const resetEditor = () => { setTitle(''); setDescription(''); setPoints(3); setQuestions([{ text: '', options: ['', ''], answerIndex: 0 }]); setEditingQuizId(null); };
-  const create = async () => {
-    if (!title.trim()) return;
-    const body = { title, description, points, questions: questions.map(q => ({ text: q.text, options: q.options, answerIndex: q.answerIndex })) };
-    const res = await fetch('/api/teacher/quizzes', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Username': username || '' }, body: JSON.stringify(body) });
-    if (!res.ok) {
-      const e = await res.json().catch(()=>({} as any));
-      return alert(e?.error || 'Failed to create quiz');
+  const save = async () => {
+    if (!title.trim() || questions.some(q => !q.text.trim() || q.options.some(o => !o.trim()))) {
+      return alert('Title and all questions/options must be filled');
     }
-    resetEditor();
+    setLoading(true);
+    const method = editingQuizId ? 'PUT' : 'POST';
+    const url = editingQuizId ? `/api/teacher/quizzes/${editingQuizId}` : '/api/teacher/quizzes';
+    const res = await fetch(url, { method, headers: { 'Content-Type': 'application/json', 'X-Username': username || '' }, body: JSON.stringify({ title, description, points, questions }) });
+    setLoading(false);
+    if (!res.ok) {
+      const e = await res.json().catch(() => ({} as any));
+      return alert(e?.error || (editingQuizId ? 'Failed to update' : 'Failed to create'));
+    }
+    reset();
     await load();
   };
+
+  const removeQuiz = async (quizId: string) => {
+    if (!confirm('Delete this quiz?')) return;
+    const res = await fetch(`/api/teacher/quizzes/${quizId}`, { method: 'DELETE', headers: { 'X-Username': username || '' } });
+    if (!res.ok) {
+      const e = await res.json().catch(() => ({} as any));
+      return alert(e?.error || 'Failed to delete');
+    }
+    await load();
+  };
+
   const startEdit = (q: any) => {
     setEditingQuizId(q.id);
-    setTitle(q.title || '');
+    setTitle(q.title);
     setDescription(q.description || '');
-    setPoints(Number(q.points || 3));
-    setQuestions(Array.isArray(q.questions) ? q.questions.map((qq: any) => ({ id: qq.id, text: qq.text, options: qq.options || [], answerIndex: Number(qq.answerIndex || 0) })) : [{ text: '', options: ['', ''], answerIndex: 0 }]);
-  };
-  const saveEdit = async () => {
-    if (!editingQuizId) return;
-    if (!title.trim()) return;
-    const body = { title, description, points, questions: questions.map(q => ({ id: q.id, text: q.text, options: q.options, answerIndex: q.answerIndex })) };
-    const res = await fetch(`/api/teacher/quizzes/${encodeURIComponent(editingQuizId)}`, { method: 'PUT', headers: { 'Content-Type': 'application/json', 'X-Username': username || '' }, body: JSON.stringify(body) });
-    if (!res.ok) {
-      const e = await res.json().catch(()=>({} as any));
-      return alert(e?.error || 'Failed to update quiz');
-    }
-    resetEditor();
-    await load();
-  };
-  const removeQuiz = async (id: string) => {
-    if (!confirm('Delete this quiz? This cannot be undone.')) return;
-    const res = await fetch(`/api/teacher/quizzes/${encodeURIComponent(id)}`, { method: 'DELETE', headers: { 'X-Username': username || '' } });
-    if (!res.ok) {
-      const e = await res.json().catch(()=>({} as any));
-      return alert(e?.error || 'Failed to delete quiz');
-    }
-    if (editingQuizId === id) resetEditor();
-    await load();
+    setPoints(q.points);
+    setQuestions(Array.isArray(q.questions) ? q.questions : []);
   };
 
   return (
-    <Section title="Quizzes">
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: -20 }}
+      transition={{ duration: 0.5 }}
+      className="space-y-6"
+    >
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div>
-          <h3 className="font-semibold mb-2">{editingQuizId ? 'Edit Quiz' : 'Create Quiz'}</h3>
-          <div className="space-y-2 text-sm">
-            <input className="w-full rounded-lg px-3 py-2 text-[var(--foreground)]" placeholder="Title" value={title} onChange={e=>setTitle(e.target.value)} />
-            <textarea className="w-full rounded-lg px-3 py-2 text-[var(--foreground)]" placeholder="Description (optional)" value={description} onChange={e=>setDescription(e.target.value)} />
-            <div className="flex items-center gap-2">
-              <span className="text-earth-muted">Points (1–3)</span>
-              <input className="w-24 rounded-lg px-3 py-2 text-[var(--foreground)]" type="number" min={1} max={3} value={points} onChange={e=>setPoints(Number(e.target.value))} />
+        <motion.div
+          initial={{ opacity: 0, scale: 0.95 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ duration: 0.5, delay: 0.1 }}
+          className="bg-gradient-to-br from-purple-500/20 to-pink-500/20 border border-purple-400/30 rounded-2xl p-6 backdrop-blur-xl"
+        >
+          <h3 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
+            <Plus className="w-5 h-5 text-purple-400" />
+            {editingQuizId ? 'Edit' : 'Create'} Quiz
+          </h3>
+          <div className="space-y-3">
+            <input className="w-full rounded-lg px-4 py-2 bg-white/10 border border-white/20 text-white placeholder-white/50" placeholder="Quiz Title" value={title} onChange={e => setTitle(e.target.value)} />
+            <textarea className="w-full rounded-lg px-4 py-2 bg-white/10 border border-white/20 text-white placeholder-white/50" placeholder="Description (optional)" value={description} onChange={e => setDescription(e.target.value)} rows={2} />
+            <div>
+              <label className="block text-white/70 text-sm mb-2">Points</label>
+              <input className="w-full rounded-lg px-4 py-2 bg-white/10 border border-white/20 text-white" type="number" min={1} value={points} onChange={e => setPoints(Number(e.target.value))} />
             </div>
-            <div className="space-y-3">
-              {questions.map((q, qi) => (
-                <div key={qi} className="p-3 rounded-lg bg-[var(--earth-card)] border border-[var(--earth-border)]">
-                  <input className="w-full rounded-lg px-3 py-2 text-[var(--foreground)] mb-2" placeholder={`Question ${qi+1}`} value={q.text} onChange={e=>updateQ(qi, { text: e.target.value })} />
-                  {q.options.map((o, oi) => (
-                    <div key={oi} className="flex items-center gap-2 mb-2">
-                      <input className="flex-1 rounded-lg px-3 py-2 text-[var(--foreground)]" placeholder={`Option ${oi+1}`} value={o} onChange={e=>updateOpt(qi, oi, e.target.value)} />
-                      <label className="text-xs text-earth-muted flex items-center gap-1">
-                        <input type="radio" name={`ans-${qi}`} checked={q.answerIndex === oi} onChange={()=>updateQ(qi, { answerIndex: oi })} /> Correct
-                      </label>
+
+            <div className="mb-4">
+              <h4 className="text-white font-medium mb-2">Questions</h4>
+              <div className="space-y-3 max-h-48 overflow-y-auto">
+                {questions.map((q, qi) => (
+                  <div key={qi} className="bg-white/5 rounded-lg p-3 border border-white/10">
+                    <input className="w-full rounded px-2 py-1 bg-white/10 border border-white/20 text-white text-sm mb-2 placeholder-white/50" placeholder={`Question ${qi + 1}`} value={q.text} onChange={e => setQuestions(questions.map((qq, i) => i === qi ? { ...qq, text: e.target.value } : qq))} />
+                    <div className="space-y-1">
+                      {q.options.map((opt, oi) => (
+                        <input key={oi} className="w-full rounded px-2 py-1 bg-white/10 border border-white/20 text-white text-sm placeholder-white/50" placeholder={`Option ${oi + 1}`} value={opt} onChange={e => {
+                          const newQ = { ...questions[qi], options: questions[qi].options.map((o, j) => j === oi ? e.target.value : o) };
+                          setQuestions(questions.map((qq, i) => i === qi ? newQ : qq));
+                        }} />
+                      ))}
                     </div>
-                  ))}
-                  {q.options.length < 4 && (
-                    <Button variant="secondary" onClick={()=>addOption(qi)}>Add Option</Button>
-                  )}
-                </div>
-              ))}
-              <Button variant="secondary" onClick={addQuestion}>Add Question</Button>
-            </div>
-            {!editingQuizId ? (
-              <Button className="bg-earth-orange hover:bg-earth-orange-hover" onClick={create}>Create Quiz</Button>
-            ) : (
-              <div className="flex gap-2">
-                <Button className="bg-earth-orange hover:bg-earth-orange-hover" onClick={saveEdit}>Save Changes</Button>
-                <Button variant="secondary" onClick={resetEditor}>Cancel</Button>
+                    <div className="mt-2 flex items-center gap-2">
+                      <select className="text-xs px-2 py-1 rounded bg-white/10 border border-white/20 text-white" value={q.answerIndex} onChange={e => setQuestions(questions.map((qq, i) => i === qi ? { ...qq, answerIndex: Number(e.target.value) } : qq))}>
+                        {q.options.map((_, oi) => <option key={oi} value={oi}>Answer: {oi + 1}</option>)}
+                      </select>
+                      {q.options.length < 5 && <Button size="sm" variant="secondary" onClick={() => setQuestions(questions.map((qq, i) => i === qi ? { ...qq, options: [...qq.options, ''] } : qq))}>+ Option</Button>}
+                      <Button size="sm" variant="secondary" onClick={() => setQuestions(questions.filter((_, i) => i !== qi))}>Remove</Button>
+                    </div>
+                  </div>
+                ))}
               </div>
-            )}
+              <Button size="sm" className="w-full mt-2 bg-white/20 hover:bg-white/30" onClick={() => setQuestions([...questions, { text: '', options: ['', ''], answerIndex: 0 }])}>+ Question</Button>
+            </div>
+
+            <div className="flex gap-2">
+              <Button onClick={save} disabled={loading} className="flex-1 bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600">
+                {loading ? 'Saving...' : 'Save Quiz'}
+              </Button>
+              {editingQuizId && <Button onClick={reset} variant="secondary" className="flex-1">Cancel</Button>}
+            </div>
           </div>
-        </div>
+        </motion.div>
+
         <div>
-          <h3 className="font-semibold mb-2">Your Quizzes</h3>
-          <div className="space-y-2">
-            {list.length === 0 && <p className="text-sm text-earth-muted">No quizzes yet.</p>}
-            {list.map(q => (
-              <div key={q.id} className="p-3 rounded-lg bg-[var(--earth-card)] border border-[var(--earth-border)]">
-                <div className="flex items-start justify-between gap-2">
+          <h3 className="text-xl font-bold text-white mb-4">Your Quizzes ({list.length})</h3>
+          <div className="space-y-3 max-h-96 overflow-y-auto">
+            {list.map((q, idx) => (
+              <motion.div
+                key={q.id}
+                initial={{ opacity: 0, x: -20 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ duration: 0.3, delay: idx * 0.05 }}
+                className="bg-white/10 border border-white/20 rounded-xl p-4 backdrop-blur-xl"
+              >
+                <div className="flex items-start justify-between gap-2 mb-2">
                   <div>
-                    <div className="font-medium">{q.title} <span className="text-xs text-earth-muted">• {q.points} pts • {q.questions?.length||0} Qs</span></div>
-                    {q.description && <div className="text-sm text-earth-muted">{q.description}</div>}
+                    <h4 className="font-semibold text-white">{q.title}</h4>
+                    {q.description && <p className="text-white/70 text-sm">{q.description}</p>}
+                    <p className="text-xs text-white/60 mt-1">{q.points} pts • {q.questions?.length || 0} Qs</p>
                   </div>
-                  <div className="flex gap-2">
-                    <Button variant="secondary" onClick={() => setExpanded(e => ({ ...e, [q.id]: !e[q.id] }))}>{expanded[q.id] ? 'Hide' : 'View'} Questions</Button>
-                    <Button variant="secondary" onClick={() => startEdit(q)}>Edit</Button>
-                    <Button className="bg-red-600 hover:bg-red-700" onClick={() => removeQuiz(q.id)}>Delete</Button>
-                  </div>
+                </div>
+                <div className="flex gap-2 flex-wrap">
+                  <Button size="sm" variant="secondary" onClick={() => setExpanded(e => ({ ...e, [q.id]: !e[q.id] }))}>
+                    {expanded[q.id] ? 'Hide' : 'View'} Qs
+                  </Button>
+                  <Button size="sm" variant="secondary" onClick={() => startEdit(q)}>Edit</Button>
+                  <Button size="sm" className="bg-red-600 hover:bg-red-700" onClick={() => removeQuiz(q.id)}>Delete</Button>
                 </div>
                 {expanded[q.id] && Array.isArray(q.questions) && (
-                  <div className="mt-3 space-y-2">
-                    {q.questions.map((qq:any, idx:number) => (
-                      <div key={qq.id || idx} className="p-2 rounded-lg bg-[var(--background)]/30 border border-[var(--earth-border)]">
-                        <div className="text-sm font-medium">Q{idx+1}. {qq.text}</div>
-                        <ul className="mt-1 text-xs list-disc list-inside text-earth-muted">
-                          {qq.options?.map((opt:string, oi:number) => (
+                  <div className="mt-3 space-y-2 text-xs">
+                    {q.questions.map((qq: any, idx: number) => (
+                      <div key={qq.id || idx} className="bg-white/5 rounded p-2 border border-white/10">
+                        <div className="font-medium text-white">Q{idx + 1}. {qq.text}</div>
+                        <ul className="mt-1 list-disc list-inside text-white/70">
+                          {qq.options?.map((opt: string, oi: number) => (
                             <li key={oi} className={oi === Number(qq.answerIndex) ? 'text-emerald-400' : ''}>
                               {opt} {oi === Number(qq.answerIndex) ? '✓' : ''}
                             </li>
@@ -526,16 +589,16 @@ function Quizzes() {
                     ))}
                   </div>
                 )}
-              </div>
+              </motion.div>
             ))}
           </div>
         </div>
       </div>
-    </Section>
+    </motion.div>
   );
 }
 
-function Assignments() {
+function TeacherAssignments() {
   const { username } = useAuth();
   const [list, setList] = useState<any[]>([]);
   const [title, setTitle] = useState('');
@@ -546,10 +609,12 @@ function Assignments() {
   const [subsLoading, setSubsLoading] = useState(false);
   const [activeAssignmentId, setActiveAssignmentId] = useState<string | null>(null);
   const [activeAssignmentTitle, setActiveAssignmentTitle] = useState<string>('');
+
   const load = async () => {
     const data = await fetch('/api/teacher/assignments', { headers: { 'X-Username': username || '' } }).then(r => r.json());
     setList(Array.isArray(data) ? data : []);
   };
+
   const loadSubs = async (assignmentId?: string) => {
     setSubsLoading(true);
     try {
@@ -560,13 +625,14 @@ function Assignments() {
       setSubsLoading(false);
     }
   };
+
   useEffect(() => { load(); loadSubs(); }, []);
 
   const create = async () => {
     if (!title.trim()) return;
     const res = await fetch('/api/teacher/assignments', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Username': username || '' }, body: JSON.stringify({ title, description, deadline, maxPoints }) });
     if (!res.ok) {
-      const e = await res.json().catch(()=>({} as any));
+      const e = await res.json().catch(() => ({} as any));
       return alert(e?.error || 'Failed to create assignment');
     }
     setTitle(''); setDescription(''); setDeadline(''); setMaxPoints(10);
@@ -585,59 +651,88 @@ function Assignments() {
   };
 
   return (
-    <Section title="Assignments">
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: -20 }}
+      transition={{ duration: 0.5 }}
+      className="space-y-6"
+    >
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div>
-          <h3 className="font-semibold mb-2">Create Assignment</h3>
-          <div className="space-y-2">
-            <input className="w-full rounded-lg px-3 py-2 text-[var(--foreground)]" placeholder="Title" value={title} onChange={e=>setTitle(e.target.value)} />
-            <textarea className="w-full rounded-lg px-3 py-2 text-[var(--foreground)]" placeholder="Description (optional)" value={description} onChange={e=>setDescription(e.target.value)} />
-            <input className="w-full rounded-lg px-3 py-2 text-[var(--foreground)]" type="date" value={deadline} onChange={e=>setDeadline(e.target.value)} />
-            <div className="flex items-center gap-2">
-              <span className="text-earth-muted text-sm">Max Points (1–10)</span>
-              <input className="w-24 rounded-lg px-3 py-2 text-[var(--foreground)]" type="number" min={1} max={10} value={maxPoints} onChange={e=>setMaxPoints(Number(e.target.value))} />
+        <motion.div
+          initial={{ opacity: 0, scale: 0.95 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ duration: 0.5, delay: 0.1 }}
+          className="bg-gradient-to-br from-emerald-500/20 to-green-500/20 border border-emerald-400/30 rounded-2xl p-6 backdrop-blur-xl"
+        >
+          <h3 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
+            <Plus className="w-5 h-5 text-emerald-400" />
+            Create Assignment
+          </h3>
+          <div className="space-y-3">
+            <input className="w-full rounded-lg px-4 py-2 bg-white/10 border border-white/20 text-white placeholder-white/50" placeholder="Title" value={title} onChange={e => setTitle(e.target.value)} />
+            <textarea className="w-full rounded-lg px-4 py-2 bg-white/10 border border-white/20 text-white placeholder-white/50" placeholder="Description (optional)" value={description} onChange={e => setDescription(e.target.value)} rows={2} />
+            <div className="grid grid-cols-2 gap-3">
+              <input className="rounded-lg px-4 py-2 bg-white/10 border border-white/20 text-white" type="date" value={deadline} onChange={e => setDeadline(e.target.value)} />
+              <input className="rounded-lg px-4 py-2 bg-white/10 border border-white/20 text-white" type="number" min={1} max={10} value={maxPoints} onChange={e => setMaxPoints(Number(e.target.value))} placeholder="Max Points" />
             </div>
-            <Button className="bg-earth-orange hover:bg-earth-orange-hover" onClick={create}>Create Assignment</Button>
+            <Button onClick={create} className="w-full bg-gradient-to-r from-emerald-500 to-green-500 hover:from-emerald-600 hover:to-green-600">
+              Create Assignment
+            </Button>
           </div>
-        </div>
-        <div>
-          <h3 className="font-semibold mb-2">Your Assignments</h3>
-          <div className="space-y-2">
-            {list.length === 0 && <p className="text-sm text-earth-muted">No assignments yet.</p>}
-            {list.map(a => (
-              <div key={a.id} className="p-3 rounded-lg bg-[var(--earth-card)] border border-[var(--earth-border)]">
-                <div className="flex items-start justify-between gap-2">
-                  <div>
-                    <div className="font-medium">{a.title} <span className="text-xs text-earth-muted">• Max {a.maxPoints} pts</span></div>
-                    {a.description && <div className="text-sm text-earth-muted">{a.description}</div>}
-                    {a.deadline && <div className="text-xs text-earth-muted">Deadline: {a.deadline}</div>}
-                  </div>
-                  <div>
-                    <Button variant="secondary" onClick={() => { setActiveAssignmentId(a.id); setActiveAssignmentTitle(a.title); loadSubs(a.id); }}>View Submissions</Button>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
+        </motion.div>
 
-          <div className="mt-6">
-            <h3 className="font-semibold mb-2">Assignment Submissions {activeAssignmentId ? <span className="text-earth-muted text-sm">for “{activeAssignmentTitle}”</span> : null}</h3>
-            {activeAssignmentId && (
-              <div className="mb-2">
-                <Button variant="secondary" onClick={() => { setActiveAssignmentId(null); setActiveAssignmentTitle(''); loadSubs(); }}>Show all submissions</Button>
-              </div>
-            )}
-            {subsLoading && <p className="text-sm text-earth-muted">Loading…</p>}
-            {!subsLoading && subs.length === 0 && <p className="text-sm text-earth-muted">{activeAssignmentId ? 'No submissions for this assignment yet.' : 'No submissions yet.'}</p>}
-            <div className="space-y-2">
-              {subs.map((s: any) => (
-                <AssignmentSubmissionCard key={s.id} s={s} onReview={review} />
-              ))}
-            </div>
+        <div>
+          <h3 className="text-xl font-bold text-white mb-4">Your Assignments ({list.length})</h3>
+          <div className="space-y-3 max-h-96 overflow-y-auto">
+            {list.map((a, idx) => (
+              <motion.div
+                key={a.id}
+                initial={{ opacity: 0, x: -20 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ duration: 0.3, delay: idx * 0.05 }}
+                className="bg-white/10 border border-white/20 rounded-xl p-4 backdrop-blur-xl cursor-pointer hover:bg-white/15 transition-all"
+                onClick={() => { setActiveAssignmentId(a.id); setActiveAssignmentTitle(a.title); loadSubs(a.id); }}
+              >
+                <h4 className="font-semibold text-white mb-2">{a.title}</h4>
+                {a.description && <p className="text-white/70 text-sm mb-2">{a.description}</p>}
+                <div className="flex items-center justify-between text-xs text-white/60">
+                  <span>📋 Max {a.maxPoints} pts</span>
+                  {a.deadline && <span>⏰ {a.deadline}</span>}
+                </div>
+              </motion.div>
+            ))}
           </div>
         </div>
       </div>
-    </Section>
+
+      {activeAssignmentId && (
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5, delay: 0.2 }}
+          className="bg-white/10 border border-white/20 rounded-2xl p-6 backdrop-blur-xl"
+        >
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-xl font-bold text-white">Submissions for "{activeAssignmentTitle}"</h3>
+            <Button onClick={() => { setActiveAssignmentId(null); setActiveAssignmentTitle(''); loadSubs(); }} variant="secondary" size="sm">
+              Show All
+            </Button>
+          </div>
+          {subsLoading ? (
+            <p className="text-white/70">Loading...</p>
+          ) : subs.length === 0 ? (
+            <p className="text-white/70">No submissions yet</p>
+          ) : (
+            <div className="space-y-3 max-h-96 overflow-y-auto">
+              {subs.map((s) => (
+                <AssignmentSubmissionCard key={s.id} s={s} onReview={review} />
+              ))}
+            </div>
+          )}
+        </motion.div>
+      )}
+    </motion.div>
   );
 }
 
@@ -650,251 +745,61 @@ function AssignmentSubmissionCard({ s, onReview }: { s: any; onReview: (id: stri
   const approved = s.status === 'approved';
   const rejected = s.status === 'rejected';
   const submitted = s.status === 'submitted';
+
   return (
-    <div className="p-3 rounded-lg bg-[var(--earth-card)] border border-[var(--earth-border)]">
-      <div className="flex items-start justify-between gap-2">
-        <div className="text-sm">
-          <div><span className="text-earth-muted">Student:</span> @{s.studentUsername} {s.studentName ? (<span className="text-earth-muted">• {s.studentName}</span>) : null}</div>
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      transition={{ duration: 0.3 }}
+      className="bg-white/5 border border-white/10 rounded-lg p-4"
+    >
+      <div className="flex items-start justify-between gap-4 mb-3">
+        <div className="text-sm flex-1">
+          <div className="text-white font-medium">@{s.studentUsername} {s.studentName && <span className="text-white/70">• {s.studentName}</span>}</div>
           {(s.className || s.section) && (
-            <div className="text-xs text-earth-muted">Class: {s.className || '-'} • Section: {s.section || '-'}</div>
+            <div className="text-xs text-white/60 mt-1">Class: {s.className || '-'} • Section: {s.section || '-'}</div>
           )}
-          <div className="text-xs text-earth-muted">Max {maxPts} pts</div>
-          <div className="text-sm mt-1"><span className="text-earth-muted">Status:</span> {s.status}{typeof s.points !== 'undefined' ? ` • ${s.points} pts` : ''}</div>
         </div>
-        <div className="text-xs text-earth-muted">{new Date(s.submittedAt).toLocaleString()}</div>
+        <div className="text-xs text-white/40">{new Date(s.submittedAt).toLocaleString()}</div>
       </div>
-      <div className="pt-2 flex gap-2 flex-wrap text-xs">
-        {Array.isArray(s.files) && s.files.length > 0 && s.files.map((f: string, i: number) => (
-          <a key={i} href={f} target="_blank" rel="noreferrer" className="px-2 py-1 rounded border border-[var(--earth-border)] hover:underline">File {i+1}</a>
-        ))}
-      </div>
-      <div className="mt-2 flex items-center gap-3">
-        <label className="text-sm text-earth-muted flex items-center gap-2">
-          Points
-          <input
-            className="w-24 rounded-lg px-3 py-2 text-[var(--foreground)]"
-            type="number"
-            min={0}
-            max={maxPts}
-            value={points}
-            onChange={e => setPoints(Number(e.target.value))}
-            disabled={approved}
-          />
-          <span className="text-xs">/ {maxPts}</span>
-        </label>
-      </div>
-      <div className="mt-2 flex gap-2">
-        {submitted && (
-          <Button className="bg-emerald-600 hover:bg-emerald-700" onClick={() => onReview(s.id, 'approved', points)}>Approve</Button>
-        )}
-        {submitted && (
-          <Button className="bg-red-600 hover:bg-red-700" onClick={() => onReview(s.id, 'rejected')}>Reject</Button>
-        )}
-        {approved && (
-          <span className="text-emerald-400 text-sm">Approved • {s.points} pts</span>
-        )}
-        {rejected && (
-          <span className="text-red-400 text-sm">Rejected</span>
-        )}
-      </div>
-    </div>
-  );
-}
 
-function Students() {
-  const { username } = useAuth();
-  const [list, setList] = useState<Array<{ username: string; name?: string; className?: string; section?: string }>>([]);
-  useEffect(() => {
-    let mounted = true;
-    fetch('/api/teacher/students', { headers: { 'X-Username': username || '' } })
-      .then(r => r.json())
-      .then(d => { if (mounted) setList(Array.isArray(d)?d:[]); });
-    return () => { mounted = false; };
-  }, [username]);
-  return (
-    <Section title="Students">
-      <div className="space-y-2 text-sm">
-        {list.length === 0 && <p className="text-earth-muted">No students found for your school.</p>}
-        {list.map(s => (
-          <div key={s.username} className="p-3 rounded-lg bg-[var(--earth-card)] border border-[var(--earth-border)]">
-            <div className="font-medium">{s.name || '-'} <span className="text-xs text-earth-muted">(@{s.username})</span></div>
-            <div className="text-xs text-earth-muted">Class: {s.className || '-'} • Section: {s.section || '-'}</div>
-          </div>
-        ))}
-      </div>
-    </Section>
-  );
-}
-
-function Announcements() {
-  const { username } = useAuth();
-  const [list, setList] = useState<any[]>([]);
-  const [title, setTitle] = useState('');
-  const [body, setBody] = useState('');
-  const load = async () => {
-    const data = await fetch('/api/teacher/announcements', { headers: { 'X-Username': username || '' } }).then(r => r.json());
-    setList(Array.isArray(data) ? data : []);
-  };
-  useEffect(() => { load(); }, []);
-
-  const create = async () => {
-    if (!title.trim()) return;
-    const res = await fetch('/api/teacher/announcements', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Username': username || '' }, body: JSON.stringify({ title, body }) });
-    if (!res.ok) {
-      const e = await res.json().catch(()=>({} as any));
-      return alert(e?.error || 'Failed to post announcement');
-    }
-    setTitle(''); setBody('');
-    await load();
-  };
-
-  return (
-    <Section title="Announcements">
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div>
-          <h3 className="font-semibold mb-2">Post Announcement</h3>
-          <div className="space-y-2">
-            <input className="w-full rounded-lg px-3 py-2 text-[var(--foreground)]" placeholder="Title" value={title} onChange={e=>setTitle(e.target.value)} />
-            <textarea className="w-full rounded-lg px-3 py-2 text-[var(--foreground)]" placeholder="Write something…" value={body} onChange={e=>setBody(e.target.value)} />
-            <Button className="bg-earth-orange hover:bg-earth-orange-hover" onClick={create}>Post</Button>
-          </div>
-        </div>
-        <div>
-          <h3 className="font-semibold mb-2">Your Announcements</h3>
-          <div className="space-y-2">
-            {list.length === 0 && <p className="text-sm text-earth-muted">No announcements yet.</p>}
-            {list.map(a => (
-              <div key={a.id} className="p-3 rounded-lg bg-[var(--earth-card)] border border-[var(--earth-border)]">
-                <div className="font-medium">{a.title}</div>
-                {a.body && <div className="text-sm text-earth-muted whitespace-pre-wrap">{a.body}</div>}
-                <div className="text-xs text-earth-muted mt-1">{new Date(a.createdAt).toLocaleString()}</div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-    </Section>
-  );
-}
-
-function Profile() {
-  const { username } = useAuth();
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [schools, setSchools] = useState<Array<{ id: string; name: string }>>([]);
-  const [data, setData] = useState<any>({});
-
-  useEffect(() => {
-    let mounted = true;
-    const run = async () => {
-      try {
-        const [p, s] = await Promise.all([
-          fetch('/api/me/profile', { headers: { 'X-Username': username || '' } }).then(r => r.json()),
-          fetch('/api/schools').then(r => r.json()),
-        ]);
-        if (!mounted) return;
-        setData(p || {});
-        setSchools(Array.isArray(s) ? s : []);
-      } finally {
-        if (mounted) setLoading(false);
-      }
-    };
-    run();
-    return () => { mounted = false; };
-  }, [username]);
-
-  const onPhoto = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => setData((d:any) => ({ ...d, photoDataUrl: String(reader.result || '') }));
-    reader.readAsDataURL(file);
-  };
-
-  const save = async () => {
-    setSaving(true);
-    try {
-      const res = await fetch('/api/me/profile', { method: 'PUT', headers: { 'Content-Type': 'application/json', 'X-Username': username || '' }, body: JSON.stringify({
-        name: data.name || '',
-        email: data.email || '',
-        schoolId: data.schoolId || '',
-        photoDataUrl: data.photoDataUrl || '',
-        teacherId: data.teacherId || '',
-        subject: data.subject || '',
-      }) });
-      if (!res.ok) {
-        const e = await res.json().catch(() => ({} as any));
-        alert(e?.error || 'Failed to save profile');
-        return;
-      }
-      const p = await res.json();
-      setData(p);
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  return (
-    <Section title="Profile">
-      {loading ? (
-        <div className="text-earth-muted">Loading…</div>
-      ) : (
-        <div className="space-y-4">
-          <div className="flex items-center gap-4">
-            <div>
-              {data.photoDataUrl ? (
-                <img src={data.photoDataUrl} alt="Profile" className="h-20 w-20 object-cover rounded-full" />
-              ) : (
-                <div className="h-20 w-20 rounded-full bg-[var(--earth-border)] flex items-center justify-center text-earth-muted">No Photo</div>
-              )}
-            </div>
-            <div>
-              <input type="file" accept="image/*" onChange={onPhoto} className="text-[var(--foreground)] bg-white rounded" />
-            </div>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            <label className="block">
-              <span className="block text-sm text-earth-muted mb-1">Username</span>
-              <input className="w-full rounded-lg px-3 py-2 text-[var(--foreground)]" value={`@${data.username || username}`}
-                readOnly />
-            </label>
-            <label className="block">
-              <span className="block text-sm text-earth-muted mb-1">Role</span>
-              <input className="w-full rounded-lg px-3 py-2 text-[var(--foreground)]" value={data.role || 'teacher'} readOnly />
-            </label>
-            <label className="block">
-              <span className="block text-sm text-earth-muted mb-1">Full Name</span>
-              <input className="w-full rounded-lg px-3 py-2 text-[var(--foreground)]" value={data.name || ''} onChange={e => setData({ ...data, name: e.target.value })} />
-            </label>
-            <label className="block">
-              <span className="block text-sm text-earth-muted mb-1">Email</span>
-              <input className="w-full rounded-lg px-3 py-2 text-[var(--foreground)]" value={data.email || ''} onChange={e => setData({ ...data, email: e.target.value })} />
-            </label>
-            <label className="block">
-              <span className="block text-sm text-earth-muted mb-1">School</span>
-              <select className="w-full rounded-lg px-3 py-2 text-[var(--foreground)]" value={data.schoolId || ''} onChange={e => setData({ ...data, schoolId: e.target.value })}>
-                <option value="">Select school…</option>
-                {schools.map(s => (
-                  <option key={s.id} value={s.id}>{s.name}</option>
-                ))}
-              </select>
-            </label>
-            <label className="block">
-              <span className="block text-sm text-earth-muted mb-1">Teacher ID</span>
-              <input className="w-full rounded-lg px-3 py-2 text-[var(--foreground)]" value={data.teacherId || ''} onChange={e => setData({ ...data, teacherId: e.target.value })} />
-            </label>
-            <label className="block">
-              <span className="block text-sm text-earth-muted mb-1">Subject</span>
-              <input className="w-full rounded-lg px-3 py-2 text-[var(--foreground)]" value={data.subject || ''} onChange={e => setData({ ...data, subject: e.target.value })} />
-            </label>
-          </div>
-          <div className="flex gap-2">
-            <Button className="bg-earth-orange hover:bg-earth-orange-hover" onClick={save} disabled={saving}>{saving ? 'Saving…' : 'Save Changes'}</Button>
-          </div>
-          <p className="text-xs text-earth-muted">All fields are shown even if empty. You can fill them here and save.</p>
+      {Array.isArray(s.files) && s.files.length > 0 && (
+        <div className="flex gap-2 mb-3 flex-wrap">
+          {s.files.map((f: string, i: number) => (
+            <a key={i} href={f} target="_blank" rel="noreferrer" className="px-2 py-1 text-xs rounded border border-white/20 text-blue-300 hover:text-blue-200">
+              File {i + 1}
+            </a>
+          ))}
         </div>
       )}
-    </Section>
+
+      <div className="flex items-end gap-3">
+        {submitted && (
+          <>
+            <div className="flex items-center gap-2">
+              <label className="text-sm text-white/70">Points:</label>
+              <input
+                className="w-16 rounded-lg px-2 py-1 bg-white/10 border border-white/20 text-white text-sm"
+                type="number"
+                min={0}
+                max={maxPts}
+                value={points}
+                onChange={e => setPoints(Number(e.target.value))}
+              />
+              <span className="text-xs text-white/70">/ {maxPts}</span>
+            </div>
+            <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700" onClick={() => onReview(s.id, 'approved', points)}>
+              Approve
+            </Button>
+            <Button size="sm" className="bg-red-600 hover:bg-red-700" onClick={() => onReview(s.id, 'rejected')}>
+              Reject
+            </Button>
+          </>
+        )}
+        {approved && <span className="text-sm text-emerald-400 font-medium">✓ Approved • {s.points} pts</span>}
+        {rejected && <span className="text-sm text-red-400 font-medium">✗ Rejected</span>}
+      </div>
+    </motion.div>
   );
 }
 
@@ -916,17 +821,11 @@ function TeacherVideosManager() {
   const [videoFile, setVideoFile] = useState<File | null>(null);
   const [thumbnailFile, setThumbnailFile] = useState<File | null>(null);
 
-  const categories = [
-    'Climate Change', 'Renewable Energy', 'Ocean Conservation', 
-    'Agriculture', 'Wildlife', 'Green Technology', 'Waste Management', 
-    'Water Conservation', 'Air Quality', 'Biodiversity'
-  ];
+  const categories = ['Climate Change', 'Renewable Energy', 'Ocean Conservation', 'Agriculture', 'Wildlife', 'Green Technology', 'Waste Management', 'Water Conservation', 'Air Quality', 'Biodiversity'];
 
   const loadVideos = async () => {
     try {
-      const response = await fetch(`/api/teacher/videos?teacherId=${username}`, {
-        headers: { 'X-Username': username || '' }
-      });
+      const response = await fetch(`/api/teacher/videos?teacherId=${username}`, { headers: { 'X-Username': username || '' } });
       if (response.ok) {
         const data = await response.json();
         setVideos(Array.isArray(data) ? data : []);
@@ -975,13 +874,11 @@ function TeacherVideosManager() {
       alert('Title and YouTube URL are required');
       return;
     }
-
     const videoId = extractYouTubeVideoId(form.youtubeUrl);
     if (!videoId) {
       alert('Please enter a valid YouTube URL');
       return;
     }
-
     setIsUploading(true);
     try {
       const videoData = {
@@ -995,16 +892,11 @@ function TeacherVideosManager() {
         teacherId: username,
         type: 'youtube'
       };
-
       const response = await fetch('/api/teacher/videos', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Username': username || ''
-        },
+        headers: { 'Content-Type': 'application/json', 'X-Username': username || '' },
         body: JSON.stringify(videoData)
       });
-
       if (response.ok) {
         alert('YouTube video added successfully!');
         resetForm();
@@ -1027,7 +919,6 @@ function TeacherVideosManager() {
       alert('Title and video file are required');
       return;
     }
-
     setIsUploading(true);
     try {
       const formData = new FormData();
@@ -1039,19 +930,13 @@ function TeacherVideosManager() {
       formData.append('teacherId', username || '');
       formData.append('type', 'file');
       formData.append('video', videoFile);
-      
-      if (thumbnailFile) {
-        formData.append('thumbnail', thumbnailFile);
-      }
+      if (thumbnailFile) formData.append('thumbnail', thumbnailFile);
 
       const response = await fetch('/api/teacher/videos/upload', {
         method: 'POST',
-        headers: {
-          'X-Username': username || ''
-        },
+        headers: { 'X-Username': username || '' },
         body: formData
       });
-
       if (response.ok) {
         alert('Video file uploaded successfully!');
         resetForm();
@@ -1071,13 +956,11 @@ function TeacherVideosManager() {
 
   const deleteVideo = async (videoId: string) => {
     if (!confirm('Are you sure you want to delete this video?')) return;
-
     try {
       const response = await fetch(`/api/teacher/videos/${videoId}`, {
         method: 'DELETE',
         headers: { 'X-Username': username || '' }
       });
-
       if (response.ok) {
         alert('Video deleted successfully!');
         loadVideos();
@@ -1092,285 +975,424 @@ function TeacherVideosManager() {
   };
 
   return (
-    <Section title="Videos Management">
-      <div className="space-y-6 relative z-10">
-        <div className="flex items-center justify-between">
-          <div>
-            <h3 className="text-lg font-semibold text-white/90 flex items-center gap-2">
-              <Video className="h-5 w-5 text-blue-400" />
-              Your Videos ({videos.length})
-            </h3>
-            <p className="text-white/70 text-sm">Create and manage educational videos for your students</p>
-          </div>
-          <Button
-            onClick={() => setIsUploadModalOpen(true)}
-            className="bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600 text-white flex items-center gap-2"
-          >
-            <Plus className="h-4 w-4" />
-            Add Video
-          </Button>
-        </div>
-
-        {/* Videos Grid */}
-        {videos.length === 0 ? (
-          <div className="text-center py-8 text-white/70">
-            <Video className="h-12 w-12 mx-auto mb-4 text-white/50" />
-            <p>No videos uploaded yet. Add your first video!</p>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {videos.map((video) => {
-              // Robust thumbnail fallback system
-              let thumbnailUrl = video.thumbnail;
-              
-              // If no thumbnail, try YouTube thumbnail
-              if (!thumbnailUrl && video.url && video.url.includes('youtube')) {
-                const match = video.url.match(/(?:youtu.be\/|youtube.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=))([\w-]{11})/);
-                if (match) {
-                  thumbnailUrl = `https://img.youtube.com/vi/${match[1]}/maxresdefault.jpg`;
-                }
-              }
-              
-              // If still no thumbnail, use category-based fallback
-              if (!thumbnailUrl) {
-                thumbnailUrl = getFallbackImage(video.category || 'General', video.title || '');
-              }
-              
-              return (
-              <div key={video.id} className="bg-white/10 backdrop-blur-xl border border-white/20 rounded-lg overflow-hidden">
-                <div className="aspect-video bg-cover bg-center relative" style={{ backgroundImage: `url(${thumbnailUrl})` }}>
-                  <div className="absolute inset-0 bg-black/30 flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity">
-                    <div className="bg-white/20 backdrop-blur-sm rounded-full p-3">
-                      {video.type === 'youtube' ? (
-                        <Youtube className="h-6 w-6 text-white" />
-                      ) : (
-                        <Video className="h-6 w-6 text-white" />
-                      )}
-                    </div>
-                  </div>
-                  <div className="absolute top-2 right-2 bg-gradient-to-r from-yellow-500/80 to-orange-500/80 text-white text-xs px-2 py-1 rounded-full">
-                    {video.credits} credits
-                  </div>
-                </div>
-                <div className="p-4">
-                  <h4 className="font-semibold text-white/90 text-sm mb-1 line-clamp-2">{video.title}</h4>
-                  <p className="text-white/60 text-xs mb-2 line-clamp-2">{video.description}</p>
-                  <div className="flex items-center justify-between text-xs text-white/60 mb-3">
-                    <span>{video.category}</span>
-                    <span>{video.difficulty}</span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs text-white/50">By you</span>
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      onClick={() => deleteVideo(video.id)}
-                      className="bg-red-500/20 hover:bg-red-500/30 text-red-400 border-red-400/30"
-                    >
-                      <Trash2 className="h-3 w-3" />
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: -20 }}
+      transition={{ duration: 0.5 }}
+      className="space-y-6"
+    >
+      <motion.div
+        initial={{ opacity: 0, scale: 0.95 }}
+        animate={{ opacity: 1, scale: 1 }}
+        transition={{ duration: 0.5, delay: 0.1 }}
+        className="bg-gradient-to-br from-pink-500/20 to-rose-500/20 border border-pink-400/30 rounded-2xl p-6 backdrop-blur-xl"
+      >
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-xl font-bold text-white flex items-center gap-2">
+            <Video className="w-5 h-5 text-pink-400" />
+            Videos Management
+          </h3>
+          <Dialog open={isUploadModalOpen} onOpenChange={setIsUploadModalOpen}>
+            <DialogTrigger asChild>
+              <Button className="bg-gradient-to-r from-pink-500 to-rose-500 hover:from-pink-600 hover:to-rose-600">
+                <Plus className="w-4 h-4 mr-2" />
+                Upload Video
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="bg-gradient-to-br from-slate-900 to-slate-800 border border-white/20 text-white max-h-[90vh] overflow-y-auto">
+              <DialogHeader>
+                <DialogTitle>Upload Video</DialogTitle>
+              </DialogHeader>
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm mb-2">Upload Type</label>
+                  <div className="flex gap-2">
+                    <Button variant={uploadType === 'youtube' ? 'default' : 'secondary'} onClick={() => setUploadType('youtube')} size="sm">
+                      <Youtube className="w-4 h-4 mr-2" />
+                      YouTube
+                    </Button>
+                    <Button variant={uploadType === 'file' ? 'default' : 'secondary'} onClick={() => setUploadType('file')} size="sm">
+                      <Upload className="w-4 h-4 mr-2" />
+                      File
                     </Button>
                   </div>
                 </div>
-              </div>
-              )
-            })}
-          </div>
-        )}
 
-        {/* Upload Modal */}
-        {isUploadModalOpen && (
-          <div className="fixed inset-0 bg-black/90 flex items-center justify-center z-[9999] p-4">
-            <div 
-              className="fixed inset-0 bg-transparent" 
-              onClick={() => setIsUploadModalOpen(false)}
-            ></div>
-            <div className="bg-gray-900/95 backdrop-blur-xl border border-white/30 rounded-xl p-6 max-w-2xl w-full max-h-[90vh] overflow-y-auto shadow-2xl relative z-[10000]">
-              <div className="flex justify-between items-center mb-6">
-                <h3 className="text-xl font-bold text-white/90">Add New Video</h3>
-                <Button
-                  variant="secondary"
-                  onClick={() => setIsUploadModalOpen(false)}
-                  className="bg-white/20 hover:bg-white/30 text-white border-white/30"
-                >
-                  ✕
-                </Button>
-              </div>
+                <input className="w-full rounded-lg px-4 py-2 bg-white/10 border border-white/20 text-white placeholder-white/50" placeholder="Video Title" value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} />
+                <textarea className="w-full rounded-lg px-4 py-2 bg-white/10 border border-white/20 text-white placeholder-white/50" placeholder="Description" value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} rows={2} />
 
-              {/* Upload Type Selection */}
-              <div className="mb-6">
-                <div className="flex gap-2">
-                  <Button
-                    variant={uploadType === 'youtube' ? 'default' : 'secondary'}
-                    onClick={() => setUploadType('youtube')}
-                    className={uploadType === 'youtube' 
-                      ? "bg-red-500/80 hover:bg-red-600/80 text-white"
-                      : "bg-white/20 hover:bg-white/30 text-white border-white/30"
-                    }
-                  >
-                    <Youtube className="h-4 w-4 mr-2" />
-                    YouTube Link
-                  </Button>
-                  <Button
-                    variant={uploadType === 'file' ? 'default' : 'secondary'}
-                    onClick={() => setUploadType('file')}
-                    className={uploadType === 'file' 
-                      ? "bg-blue-500/80 hover:bg-blue-600/80 text-white"
-                      : "bg-white/20 hover:bg-white/30 text-white border-white/30"
-                    }
-                  >
-                    <Upload className="h-4 w-4 mr-2" />
-                    Upload File
-                  </Button>
-                </div>
-              </div>
-
-              {/* Form Fields */}
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-white/90 text-sm mb-2">Title *</label>
-                  <input
-                    type="text"
-                    value={form.title}
-                    onChange={(e) => setForm({ ...form, title: e.target.value })}
-                    className="w-full rounded-lg px-3 py-2 bg-white/10 border border-white/20 text-white placeholder-white/50"
-                    placeholder="Enter video title"
-                  />
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-sm mb-2">Category</label>
+                    <select className="w-full rounded-lg px-3 py-2 bg-white/10 border border-white/20 text-white text-sm" value={form.category} onChange={e => setForm({ ...form, category: e.target.value })}>
+                      {categories.map(c => <option key={c} value={c}>{c}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm mb-2">Difficulty</label>
+                    <select className="w-full rounded-lg px-3 py-2 bg-white/10 border border-white/20 text-white text-sm" value={form.difficulty} onChange={e => setForm({ ...form, difficulty: e.target.value })}>
+                      <option>Beginner</option>
+                      <option>Intermediate</option>
+                      <option>Advanced</option>
+                    </select>
+                  </div>
                 </div>
 
                 <div>
-                  <label className="block text-white/90 text-sm mb-2">Description</label>
-                  <textarea
-                    value={form.description}
-                    onChange={(e) => setForm({ ...form, description: e.target.value })}
-                    className="w-full rounded-lg px-3 py-2 bg-white/10 border border-white/20 text-white placeholder-white/50"
-                    placeholder="Enter video description"
-                    rows={3}
-                  />
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div>
-                    <label className="block text-white/90 text-sm mb-2">Category</label>
-                    <select
-                      value={form.category}
-                      onChange={(e) => setForm({ ...form, category: e.target.value })}
-                      className="w-full rounded-lg px-3 py-2 bg-white/10 border border-white/20 text-white"
-                    >
-                      {categories.map(category => (
-                        <option key={category} value={category} className="bg-gray-800 text-white">
-                          {category}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="block text-white/90 text-sm mb-2">Difficulty</label>
-                    <select
-                      value={form.difficulty}
-                      onChange={(e) => setForm({ ...form, difficulty: e.target.value })}
-                      className="w-full rounded-lg px-3 py-2 bg-white/10 border border-white/20 text-white"
-                    >
-                      <option value="Beginner" className="bg-gray-800 text-white">Beginner</option>
-                      <option value="Intermediate" className="bg-gray-800 text-white">Intermediate</option>
-                      <option value="Advanced" className="bg-gray-800 text-white">Advanced</option>
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="block text-white/90 text-sm mb-2">Credits</label>
-                    <select
-                      value={form.credits}
-                      onChange={(e) => setForm({ ...form, credits: Number(e.target.value) })}
-                      className="w-full rounded-lg px-3 py-2 bg-white/10 border border-white/20 text-white"
-                    >
-                      <option value={1} className="bg-gray-800 text-white">1 Credit</option>
-                      <option value={2} className="bg-gray-800 text-white">2 Credits</option>
-                    </select>
-                  </div>
+                  <label className="block text-sm mb-2">Credits</label>
+                  <input className="w-full rounded-lg px-4 py-2 bg-white/10 border border-white/20 text-white" type="number" min={1} value={form.credits} onChange={e => setForm({ ...form, credits: Number(e.target.value) })} />
                 </div>
 
                 {uploadType === 'youtube' ? (
                   <>
-                    <div>
-                      <label className="block text-white/90 text-sm mb-2">YouTube URL *</label>
-                      <input
-                        type="url"
-                        value={form.youtubeUrl}
-                        onChange={(e) => setForm({ ...form, youtubeUrl: e.target.value })}
-                        className="w-full rounded-lg px-3 py-2 bg-white/10 border border-white/20 text-white placeholder-white/50"
-                        placeholder="https://www.youtube.com/watch?v=..."
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-white/90 text-sm mb-2">Custom Thumbnail URL (optional)</label>
-                      <input
-                        type="url"
-                        value={form.thumbnailUrl}
-                        onChange={(e) => setForm({ ...form, thumbnailUrl: e.target.value })}
-                        className="w-full rounded-lg px-3 py-2 bg-white/10 border border-white/20 text-white placeholder-white/50"
-                        placeholder="Leave empty to use YouTube thumbnail"
-                      />
-                    </div>
+                    <input className="w-full rounded-lg px-4 py-2 bg-white/10 border border-white/20 text-white placeholder-white/50" placeholder="YouTube URL" value={form.youtubeUrl} onChange={e => setForm({ ...form, youtubeUrl: e.target.value })} />
+                    <input className="w-full rounded-lg px-4 py-2 bg-white/10 border border-white/20 text-white placeholder-white/50" placeholder="Custom Thumbnail URL (optional)" value={form.thumbnailUrl} onChange={e => setForm({ ...form, thumbnailUrl: e.target.value })} />
+                    <Button onClick={handleYouTubeUpload} disabled={isUploading} className="w-full bg-gradient-to-r from-pink-500 to-rose-500">
+                      {isUploading ? 'Uploading...' : 'Add YouTube Video'}
+                    </Button>
                   </>
                 ) : (
                   <>
                     <div>
-                      <label className="block text-white/90 text-sm mb-2">Video File *</label>
-                      <input
-                        type="file"
-                        accept="video/*"
-                        onChange={(e) => setVideoFile(e.target.files?.[0] || null)}
-                        className="w-full rounded-lg px-3 py-2 bg-white/10 border border-white/20 text-white"
-                      />
+                      <label className="block text-sm mb-2">Video File</label>
+                      <input type="file" accept="video/*" onChange={e => setVideoFile(e.target.files?.[0] || null)} className="w-full text-white/70" />
                     </div>
-
                     <div>
-                      <label className="block text-white/90 text-sm mb-2">Thumbnail Image (optional)</label>
-                      <input
-                        type="file"
-                        accept="image/*"
-                        onChange={(e) => setThumbnailFile(e.target.files?.[0] || null)}
-                        className="w-full rounded-lg px-3 py-2 bg-white/10 border border-white/20 text-white"
-                      />
-                      <p className="text-white/50 text-xs mt-1">If not provided, a frame from the video will be used</p>
+                      <label className="block text-sm mb-2">Thumbnail (optional)</label>
+                      <input type="file" accept="image/*" onChange={e => setThumbnailFile(e.target.files?.[0] || null)} className="w-full text-white/70" />
                     </div>
+                    <Button onClick={handleFileUpload} disabled={isUploading} className="w-full bg-gradient-to-r from-pink-500 to-rose-500">
+                      {isUploading ? 'Uploading...' : 'Upload Video File'}
+                    </Button>
                   </>
                 )}
               </div>
+            </DialogContent>
+          </Dialog>
+        </div>
+      </motion.div>
 
-              {/* Upload Button */}
-              <div className="flex gap-2 mt-6">
-                <Button
-                  onClick={uploadType === 'youtube' ? handleYouTubeUpload : handleFileUpload}
-                  disabled={isUploading}
-                  className="bg-gradient-to-r from-green-500 to-blue-500 hover:from-green-600 hover:to-blue-600 text-white flex items-center gap-2"
-                >
-                  {isUploading ? (
-                    <>
-                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                      Uploading...
-                    </>
-                  ) : (
-                    <>
-                      {uploadType === 'youtube' ? <Youtube className="h-4 w-4" /> : <Upload className="h-4 w-4" />}
-                      {uploadType === 'youtube' ? 'Add YouTube Video' : 'Upload Video File'}
-                    </>
-                  )}
-                </Button>
-                <Button
-                  variant="secondary"
-                  onClick={() => setIsUploadModalOpen(false)}
-                  className="bg-white/20 hover:bg-white/30 text-white border-white/30"
-                >
-                  Cancel
-                </Button>
+      {videos.length === 0 ? (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ duration: 0.5, delay: 0.2 }}
+          className="text-center py-12 bg-white/10 border border-white/20 rounded-2xl"
+        >
+          <Video className="w-12 h-12 text-white/50 mx-auto mb-4" />
+          <p className="text-white/70">No videos uploaded yet</p>
+        </motion.div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {videos.map((v, idx) => (
+            <motion.div
+              key={v.id}
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.3, delay: idx * 0.05 }}
+              className="bg-white/10 border border-white/20 rounded-xl overflow-hidden backdrop-blur-xl hover:shadow-lg transition-shadow"
+            >
+              <div className="aspect-video bg-black relative overflow-hidden">
+                <img src={v.thumbnail || getFallbackImage(v.category, v.title)} alt={v.title} className="w-full h-full object-cover" />
+                <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity">
+                  <Play className="w-12 h-12 text-white" />
+                </div>
+              </div>
+              <div className="p-4">
+                <h4 className="font-semibold text-white mb-1 line-clamp-2">{v.title}</h4>
+                <div className="flex items-center justify-between text-xs text-white/60 mb-3">
+                  <span className="bg-white/10 px-2 py-1 rounded">{v.category}</span>
+                  <span>{v.difficulty}</span>
+                </div>
+                {v.description && <p className="text-white/70 text-sm mb-3 line-clamp-2">{v.description}</p>}
+                <div className="flex gap-2">
+                  <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                      <Button size="sm" variant="secondary" className="flex-1">
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent className="bg-gradient-to-br from-slate-900 to-slate-800 border border-white/20 text-white">
+                      <AlertDialogTitle>Delete Video</AlertDialogTitle>
+                      <AlertDialogDescription className="text-white/70">
+                        Are you sure you want to delete "{v.title}"? This action cannot be undone.
+                      </AlertDialogDescription>
+                      <div className="flex gap-2 justify-end">
+                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                        <AlertDialogAction className="bg-red-600 hover:bg-red-700" onClick={() => deleteVideo(v.id)}>
+                          Delete
+                        </AlertDialogAction>
+                      </div>
+                    </AlertDialogContent>
+                  </AlertDialog>
+                </div>
+              </div>
+            </motion.div>
+          ))}
+        </div>
+      )}
+    </motion.div>
+  );
+}
+
+const Play = ({ className }: { className?: string }) => (
+  <svg className={className} viewBox="0 0 24 24" fill="currentColor">
+    <path d="M8 5v14l11-7z" />
+  </svg>
+);
+
+function TeacherStudents() {
+  const { username } = useAuth();
+  const [list, setList] = useState<Array<any>>([]);
+
+  useEffect(() => {
+    let mounted = true;
+    fetch('/api/teacher/students', { headers: { 'X-Username': username || '' } })
+      .then(r => r.json())
+      .then(d => { if (mounted) setList(Array.isArray(d) ? d : []); });
+    return () => { mounted = false; };
+  }, [username]);
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: -20 }}
+      transition={{ duration: 0.5 }}
+      className="space-y-6"
+    >
+      <h3 className="text-2xl font-bold text-white mb-4">Your Students ({list.length})</h3>
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        {list.map((s, idx) => (
+          <motion.div
+            key={s.username}
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.3, delay: idx * 0.05 }}
+            className="bg-gradient-to-br from-cyan-500/20 to-blue-500/20 border border-cyan-400/30 rounded-xl p-4 backdrop-blur-xl"
+          >
+            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-cyan-400 to-blue-500 flex items-center justify-center text-lg font-bold mb-3">
+              {s.name?.[0]?.toUpperCase() || s.username?.[0]?.toUpperCase() || 'S'}
+            </div>
+            <h4 className="font-semibold text-white">{s.name || 'Student'}</h4>
+            <p className="text-white/70 text-sm">@{s.username}</p>
+            <p className="text-white/60 text-xs mt-2">📚 {s.className || 'N/A'} • {s.section || 'N/A'}</p>
+          </motion.div>
+        ))}
+      </div>
+    </motion.div>
+  );
+}
+
+function TeacherAnnouncements() {
+  const { username } = useAuth();
+  const [list, setList] = useState<any[]>([]);
+  const [title, setTitle] = useState('');
+  const [body, setBody] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  const load = async () => {
+    const data = await fetch('/api/teacher/announcements', { headers: { 'X-Username': username || '' } }).then(r => r.json());
+    setList(Array.isArray(data) ? data : []);
+  };
+
+  useEffect(() => { load(); }, []);
+
+  const create = async () => {
+    if (!title.trim()) return;
+    setLoading(true);
+    const res = await fetch('/api/teacher/announcements', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Username': username || '' }, body: JSON.stringify({ title, body }) });
+    setLoading(false);
+    if (!res.ok) {
+      const e = await res.json().catch(() => ({} as any));
+      return alert(e?.error || 'Failed to post announcement');
+    }
+    setTitle(''); setBody('');
+    await load();
+  };
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: -20 }}
+      transition={{ duration: 0.5 }}
+      className="space-y-6"
+    >
+      <motion.div
+        initial={{ opacity: 0, scale: 0.95 }}
+        animate={{ opacity: 1, scale: 1 }}
+        transition={{ duration: 0.5, delay: 0.1 }}
+        className="bg-gradient-to-br from-yellow-500/20 to-orange-500/20 border border-yellow-400/30 rounded-2xl p-6 backdrop-blur-xl"
+      >
+        <h3 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
+          <Bell className="w-5 h-5 text-yellow-400" />
+          Post Announcement
+        </h3>
+        <div className="space-y-3">
+          <input className="w-full rounded-lg px-4 py-2 bg-white/10 border border-white/20 text-white placeholder-white/50" placeholder="Title" value={title} onChange={e => setTitle(e.target.value)} />
+          <textarea className="w-full rounded-lg px-4 py-2 bg-white/10 border border-white/20 text-white placeholder-white/50" placeholder="Write your announcement..." value={body} onChange={e => setBody(e.target.value)} rows={3} />
+          <Button onClick={create} disabled={loading} className="w-full bg-gradient-to-r from-yellow-500 to-orange-500 hover:from-yellow-600 hover:to-orange-600">
+            {loading ? 'Posting...' : 'Post Announcement'}
+          </Button>
+        </div>
+      </motion.div>
+
+      <div>
+        <h3 className="text-xl font-bold text-white mb-4">Your Announcements ({list.length})</h3>
+        <div className="space-y-4">
+          {list.map((a, idx) => (
+            <motion.div
+              key={a.id}
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.3, delay: idx * 0.05 }}
+              className="bg-white/10 border border-white/20 rounded-xl p-4 backdrop-blur-xl"
+            >
+              <h4 className="font-semibold text-white text-lg mb-2">{a.title}</h4>
+              {a.body && <p className="text-white/70 text-sm mb-3 whitespace-pre-wrap">{a.body}</p>}
+              <p className="text-white/50 text-xs">📅 {new Date(a.createdAt).toLocaleDateString()}</p>
+            </motion.div>
+          ))}
+        </div>
+      </div>
+    </motion.div>
+  );
+}
+
+function TeacherProfile() {
+  const { username } = useAuth();
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [schools, setSchools] = useState<Array<{ id: string; name: string }>>([]);
+  const [data, setData] = useState<any>({});
+
+  useEffect(() => {
+    let mounted = true;
+    const run = async () => {
+      try {
+        const [p, s] = await Promise.all([
+          fetch('/api/me/profile', { headers: { 'X-Username': username || '' } }).then(r => r.json()),
+          fetch('/api/schools').then(r => r.json()),
+        ]);
+        if (!mounted) return;
+        setData(p || {});
+        setSchools(Array.isArray(s) ? s : []);
+      } finally {
+        if (mounted) setLoading(false);
+      }
+    };
+    run();
+    return () => { mounted = false; };
+  }, [username]);
+
+  const onPhoto = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => setData((d: any) => ({ ...d, photoDataUrl: String(reader.result || '') }));
+    reader.readAsDataURL(file);
+  };
+
+  const save = async () => {
+    setSaving(true);
+    try {
+      const res = await fetch('/api/me/profile', { method: 'PUT', headers: { 'Content-Type': 'application/json', 'X-Username': username || '' }, body: JSON.stringify({ name: data.name || '', email: data.email || '', schoolId: data.schoolId || '', photoDataUrl: data.photoDataUrl || '', teacherId: data.teacherId || '', subject: data.subject || '' }) });
+      if (!res.ok) {
+        const e = await res.json().catch(() => ({} as any));
+        alert(e?.error || 'Failed to save profile');
+        return;
+      }
+      const p = await res.json();
+      setData(p);
+      alert('Profile saved successfully!');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: -20 }}
+      transition={{ duration: 0.5 }}
+      className="space-y-6"
+    >
+      {loading ? (
+        <div className="text-center py-8">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white mx-auto"></div>
+          <p className="text-white/70 mt-4">Loading profile...</p>
+        </div>
+      ) : (
+        <>
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ duration: 0.5, delay: 0.1 }}
+            className="bg-gradient-to-br from-purple-500/20 to-pink-500/20 border border-purple-400/30 rounded-2xl p-6 backdrop-blur-xl"
+          >
+            <div className="flex items-start gap-6 mb-6">
+              <div>
+                {data.photoDataUrl ? (
+                  <img src={data.photoDataUrl} alt="Profile" className="h-24 w-24 rounded-full object-cover border-2 border-white/20" />
+                ) : (
+                  <div className="h-24 w-24 rounded-full bg-gradient-to-br from-purple-400 to-pink-500 flex items-center justify-center text-3xl font-bold text-white">
+                    {data.name?.[0] || username?.[0]?.toUpperCase()}
+                  </div>
+                )}
+              </div>
+              <div>
+                <h3 className="text-2xl font-bold text-white mb-2">{data.name || username}</h3>
+                <p className="text-white/70">@{username}</p>
+                <p className="text-white/60 text-sm mt-2">Teacher • {data.schoolId || 'No school selected'}</p>
               </div>
             </div>
-          </div>
-        )}
-      </div>
-    </Section>
+            <label className="inline-block">
+              <input type="file" accept="image/*" onChange={onPhoto} className="hidden" />
+              <span className="cursor-pointer text-blue-300 hover:text-blue-200 text-sm font-medium">Change Photo</span>
+            </label>
+          </motion.div>
+
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5, delay: 0.2 }}
+            className="bg-white/10 border border-white/20 rounded-2xl p-6 backdrop-blur-xl space-y-4"
+          >
+            <h3 className="text-xl font-bold text-white mb-4">Edit Profile</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-white/70 text-sm mb-2">Full Name</label>
+                <input className="w-full rounded-lg px-4 py-2 bg-white/10 border border-white/20 text-white" value={data.name || ''} onChange={e => setData({ ...data, name: e.target.value })} />
+              </div>
+              <div>
+                <label className="block text-white/70 text-sm mb-2">Email</label>
+                <input className="w-full rounded-lg px-4 py-2 bg-white/10 border border-white/20 text-white" value={data.email || ''} onChange={e => setData({ ...data, email: e.target.value })} />
+              </div>
+              <div>
+                <label className="block text-white/70 text-sm mb-2">School</label>
+                <select className="w-full rounded-lg px-4 py-2 bg-white/10 border border-white/20 text-white" value={data.schoolId || ''} onChange={e => setData({ ...data, schoolId: e.target.value })}>
+                  <option value="">Select school...</option>
+                  {schools.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="block text-white/70 text-sm mb-2">Teacher ID</label>
+                <input className="w-full rounded-lg px-4 py-2 bg-white/10 border border-white/20 text-white" value={data.teacherId || ''} onChange={e => setData({ ...data, teacherId: e.target.value })} />
+              </div>
+              <div className="md:col-span-2">
+                <label className="block text-white/70 text-sm mb-2">Subject</label>
+                <input className="w-full rounded-lg px-4 py-2 bg-white/10 border border-white/20 text-white" value={data.subject || ''} onChange={e => setData({ ...data, subject: e.target.value })} />
+              </div>
+            </div>
+            <Button onClick={save} disabled={saving} className="w-full bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600">
+              {saving ? 'Saving...' : 'Save Changes'}
+            </Button>
+          </motion.div>
+        </>
+      )}
+    </motion.div>
   );
 }

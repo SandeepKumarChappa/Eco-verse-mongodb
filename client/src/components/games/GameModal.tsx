@@ -1,6 +1,6 @@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import WasteSegregation from "/home/teja_sai/Downloads/ProductVision/client/src/components/games/WasteSegregation";
-import EcoHome from "/home/teja_sai/Downloads/ProductVision/client/src/components/games/EcoHome";
+import WasteSegregation from "./WasteSegregation";
+import EcoHome from "./EcoHome";
 
 export type GameModalProps = {
   open: boolean;

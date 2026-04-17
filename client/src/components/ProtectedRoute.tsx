@@ -19,16 +19,18 @@ export function ProtectedRoute({
 }: ProtectedRouteProps) {
   const { role } = useAuth();
   const [, setLocation] = useLocation();
+  const isUnauthorized = requireAuth && !role;
+  const isForbidden = allowedRoles && role && !allowedRoles.includes(role);
 
   useEffect(() => {
     // If authentication is required but user is not logged in
-    if (requireAuth && !role) {
+    if (isUnauthorized) {
       setLocation(redirectTo);
       return;
     }
 
     // If specific roles are required but user doesn't have the right role
-    if (allowedRoles && role && !allowedRoles.includes(role)) {
+    if (isForbidden) {
       // Redirect based on user's actual role
       if (role === 'student') {
         setLocation('/student');
@@ -41,15 +43,18 @@ export function ProtectedRoute({
       }
       return;
     }
-  }, [role, allowedRoles, requireAuth, redirectTo, setLocation]);
+  }, [role, allowedRoles, requireAuth, redirectTo, setLocation, isUnauthorized, isForbidden]);
 
   // Don't render if user doesn't meet requirements
-  if (requireAuth && !role) {
-    return null;
-  }
-
-  if (allowedRoles && role && !allowedRoles.includes(role)) {
-    return null;
+  if (isUnauthorized || isForbidden) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-emerald-950 via-slate-900 to-blue-950">
+        <div className="flex flex-col items-center gap-3 text-white/90">
+          <div className="h-12 w-12 rounded-full border-4 border-white/20 border-t-white/80 animate-spin" />
+          <div className="text-sm tracking-wide">Redirecting...</div>
+        </div>
+      </div>
+    );
   }
 
   return <>{children}</>;

@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
@@ -75,12 +76,12 @@ app.use((req, res, next) => {
     serveStatic(app);
   }
 
-// Serve the app on the port specified in the environment variable PORT
-// Use 0.0.0.0 for online (when PORT is set by platform), localhost for local dev
+// Serve the app on the port specified in the environment variable PORT.
+// Default host is 127.0.0.1 for local development.
 const port = parseInt(process.env.PORT || '5000', 10);
 
-// Force IPv4 (Windows fix)
-const host = process.env.PORT ? '0.0.0.0' : '127.0.0.1';
+// Set HOST=0.0.0.0 only when you explicitly want external access.
+const host = process.env.HOST || '127.0.0.1';
 
 server.listen(
   {

@@ -1,123 +1,260 @@
-import { Switch, Route } from "wouter";
+import { Switch, Route, useLocation } from "wouter";
+import { Suspense, lazy } from "react";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider } from "@/lib/auth";
 import { ProtectedRoute, AdminOnlyRoute, StudentOrTeacherRoute } from "@/components/ProtectedRoute";
-import Home from "@/pages/home";
-import IntegrationsPage from "@/pages/integrations";
-import NotFound from "@/pages/not-found";
-import AboutPage from "@/pages/about";
-import SignInPage from "@/pages/signin";
-import SignUpPage from "@/pages/signup";
-import GamesPage from "@/pages/games";
-import GamePlayPage from "./pages/game-play";
-import LearnPage from "@/pages/learn";
-import QuizzesPage from "@/pages/quizzes";
-import LeaderboardPage from "@/pages/leaderboard";
-import TasksPage from "@/pages/tasks";
-import AssignmentsPage from "@/pages/assignments";
-import AnnouncementsPage from "@/pages/announcements";
-import ContactHelpPage from "@/pages/contact";
-import AdminPortal from "@/pages/admin";
-import StudentSignupWizard from "@/pages/student-signup";
-import TeacherSignupWizard from "@/pages/teacher-signup";
-import StudentAppShell from "@/pages/student";
-import TeacherAppShell from "@/pages/teacher";
-import VideosPage from "@/pages/videos";
-import PublicProfilePage from "@/pages/public-profile";
+import { AnimatePresence } from "framer-motion";
+import { PageTransition } from "@/components/PageTransition";
+import { CustomCursorProvider } from "@/components/CustomCursor";
+const Home = lazy(() => import("@/pages/home"));
+const IntegrationsPage = lazy(() => import("@/pages/integrations"));
+const NotFound = lazy(() => import("@/pages/not-found"));
+const AboutPage = lazy(() => import("@/pages/about"));
+const SignInPage = lazy(() => import("@/pages/signin"));
+const SignUpPage = lazy(() => import("@/pages/signup"));
+const GamesPage = lazy(() => import("@/pages/games"));
+const GamePlayPage = lazy(() => import("./pages/game-play"));
+const LearnPage = lazy(() => import("@/pages/learn"));
+const QuizzesPage = lazy(() => import("@/pages/quizzes"));
+const LeaderboardPage = lazy(() => import("@/pages/leaderboard"));
+const TasksPage = lazy(() => import("@/pages/tasks"));
+const AssignmentsPage = lazy(() => import("@/pages/assignments"));
+const AnnouncementsPage = lazy(() => import("@/pages/announcements"));
+const ContactHelpPage = lazy(() => import("@/pages/contact"));
+const AdminPortal = lazy(() => import("@/pages/admin"));
+const StudentSignupWizard = lazy(() => import("@/pages/student-signup"));
+const TeacherSignupWizard = lazy(() => import("@/pages/teacher-signup"));
+const StudentAppShell = lazy(() => import("@/pages/student"));
+const TeacherAppShell = lazy(() => import("@/pages/teacher"));
+const VideosPage = lazy(() => import("@/pages/videos"));
+const PublicProfilePage = lazy(() => import("@/pages/public-profile"));
+const EcoVisionPage = lazy(() => import("@/pages/ecovision"));
 import { AppHamburger } from "@/components/AppHamburger";
 
 function Router() {
+  const [location] = useLocation();
+
   return (
-    <Switch>
-      <Route path="/" component={Home} />
-      <Route path="/about" component={AboutPage} />
-      <Route path="/signin" component={SignInPage} />
-      <Route path="/signup" component={SignUpPage} />
-      <Route path="/contact" component={ContactHelpPage} />
+    <Suspense fallback={<RouteFallback />}>
+      <AnimatePresence mode="wait">
+        <Switch key={location}>
+        <Route path="/">
+          {() => (
+            <PageTransition>
+              <Home />
+            </PageTransition>
+          )}
+        </Route>
+        <Route path="/about">
+          {() => (
+            <PageTransition>
+              <AboutPage />
+            </PageTransition>
+          )}
+        </Route>
+        <Route path="/signin">
+          {() => (
+            <PageTransition>
+              <SignInPage />
+            </PageTransition>
+          )}
+        </Route>
+        <Route path="/signup">
+          {() => (
+            <PageTransition>
+              <SignUpPage />
+            </PageTransition>
+          )}
+        </Route>
+        <Route path="/contact">
+          {() => (
+            <PageTransition>
+              <ContactHelpPage />
+            </PageTransition>
+          )}
+        </Route>
       
       {/* Admin only routes */}
       <Route path="/admin">
-        <AdminOnlyRoute>
-          <AdminPortal />
-        </AdminOnlyRoute>
+        {() => (
+          <PageTransition>
+            <AdminOnlyRoute>
+              <AdminPortal />
+            </AdminOnlyRoute>
+          </PageTransition>
+        )}
       </Route>
       
       {/* Signup flows - no authentication required */}
-      <Route path="/student/signup" component={StudentSignupWizard} />
-      <Route path="/teacher/signup" component={TeacherSignupWizard} />
+      <Route path="/student/signup">
+        {() => (
+          <PageTransition>
+            <StudentSignupWizard />
+          </PageTransition>
+        )}
+      </Route>
+      <Route path="/teacher/signup">
+        {() => (
+          <PageTransition>
+            <TeacherSignupWizard />
+          </PageTransition>
+        )}
+      </Route>
       
       {/* Role-specific app shells */}
       <Route path="/student">
-        <ProtectedRoute allowedRoles={["student"]}>
-          <StudentAppShell />
-        </ProtectedRoute>
+        {() => (
+          <PageTransition>
+            <ProtectedRoute allowedRoles={["student"]}>
+              <StudentAppShell />
+            </ProtectedRoute>
+          </PageTransition>
+        )}
       </Route>
       <Route path="/teacher">
-        <ProtectedRoute allowedRoles={["teacher"]}>
-          <TeacherAppShell />
-        </ProtectedRoute>
+        {() => (
+          <PageTransition>
+            <ProtectedRoute allowedRoles={["teacher"]}>
+              <TeacherAppShell />
+            </ProtectedRoute>
+          </PageTransition>
+        )}
       </Route>
       
       {/* Pages requiring authentication but available to both students and teachers */}
       <Route path="/games/play/:id">
-        <StudentOrTeacherRoute>
-          <GamePlayPage />
-        </StudentOrTeacherRoute>
+        {() => (
+          <PageTransition>
+            <StudentOrTeacherRoute>
+              <GamePlayPage />
+            </StudentOrTeacherRoute>
+          </PageTransition>
+        )}
       </Route>
       <Route path="/games">
-        <StudentOrTeacherRoute>
-          <GamesPage />
-        </StudentOrTeacherRoute>
+        {() => (
+          <PageTransition>
+            <StudentOrTeacherRoute>
+              <GamesPage />
+            </StudentOrTeacherRoute>
+          </PageTransition>
+        )}
       </Route>
       <Route path="/learn">
-        <StudentOrTeacherRoute>
-          <LearnPage />
-        </StudentOrTeacherRoute>
+        {() => (
+          <PageTransition>
+            <StudentOrTeacherRoute>
+              <LearnPage />
+            </StudentOrTeacherRoute>
+          </PageTransition>
+        )}
       </Route>
       <Route path="/quizzes">
-        <StudentOrTeacherRoute>
-          <QuizzesPage />
-        </StudentOrTeacherRoute>
+        {() => (
+          <PageTransition>
+            <StudentOrTeacherRoute>
+              <QuizzesPage />
+            </StudentOrTeacherRoute>
+          </PageTransition>
+        )}
       </Route>
       <Route path="/leaderboard">
-        <StudentOrTeacherRoute>
-          <LeaderboardPage />
-        </StudentOrTeacherRoute>
+        {() => (
+          <PageTransition>
+            <StudentOrTeacherRoute>
+              <LeaderboardPage />
+            </StudentOrTeacherRoute>
+          </PageTransition>
+        )}
       </Route>
       <Route path="/tasks">
-        <StudentOrTeacherRoute>
-          <TasksPage />
-        </StudentOrTeacherRoute>
+        {() => (
+          <PageTransition>
+            <StudentOrTeacherRoute>
+              <TasksPage />
+            </StudentOrTeacherRoute>
+          </PageTransition>
+        )}
       </Route>
       <Route path="/assignments">
-        <StudentOrTeacherRoute>
-          <AssignmentsPage />
-        </StudentOrTeacherRoute>
+        {() => (
+          <PageTransition>
+            <StudentOrTeacherRoute>
+              <AssignmentsPage />
+            </StudentOrTeacherRoute>
+          </PageTransition>
+        )}
       </Route>
       <Route path="/videos">
-        <StudentOrTeacherRoute>
-          <VideosPage />
-        </StudentOrTeacherRoute>
+        {() => (
+          <PageTransition>
+            <StudentOrTeacherRoute>
+              <VideosPage />
+            </StudentOrTeacherRoute>
+          </PageTransition>
+        )}
+      </Route>
+      <Route path="/ecovision">
+        {() => (
+          <PageTransition>
+            <StudentOrTeacherRoute>
+              <EcoVisionPage />
+            </StudentOrTeacherRoute>
+          </PageTransition>
+        )}
       </Route>
       <Route path="/announcements">
-        <StudentOrTeacherRoute>
-          <AnnouncementsPage />
-        </StudentOrTeacherRoute>
+        {() => (
+          <PageTransition>
+            <StudentOrTeacherRoute>
+              <AnnouncementsPage />
+            </StudentOrTeacherRoute>
+          </PageTransition>
+        )}
       </Route>
       <Route path="/integrations">
-        <ProtectedRoute requireAuth={true}>
-          <IntegrationsPage />
-        </ProtectedRoute>
+        {() => (
+          <PageTransition>
+            <ProtectedRoute requireAuth={true}>
+              <IntegrationsPage />
+            </ProtectedRoute>
+          </PageTransition>
+        )}
       </Route>
       
       {/* Public profile view - no authentication required */}
-      <Route path="/profile/:profileId" component={PublicProfilePage} />
+      <Route path="/profile/:profileId">
+        {() => (
+          <PageTransition>
+            <PublicProfilePage />
+          </PageTransition>
+        )}
+      </Route>
       
-      <Route component={NotFound} />
-    </Switch>
+      <Route>
+        {() => (
+          <PageTransition>
+            <NotFound />
+          </PageTransition>
+        )}
+      </Route>
+        </Switch>
+      </AnimatePresence>
+    </Suspense>
+  );
+}
+
+function RouteFallback() {
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-emerald-950 via-slate-900 to-blue-950">
+      <div className="flex flex-col items-center gap-3 text-white/90">
+        <div className="h-12 w-12 rounded-full border-4 border-white/20 border-t-white/80 animate-spin" />
+        <div className="text-sm tracking-wide">Loading...</div>
+      </div>
+    </div>
   );
 }
 
@@ -127,6 +264,8 @@ function App() {
       <AuthProvider>
         <TooltipProvider>
           <Toaster />
+          {/* Custom Cursor with Eco Theme */}
+          <CustomCursorProvider />
           {/* Global menu overlay available on all routes */}
           <div className="fixed top-4 left-4 z-[60] pointer-events-none">
             <AppHamburger />
