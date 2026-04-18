@@ -1,6 +1,7 @@
 import { useAuth } from "@/lib/auth";
 import { useEffect, useState } from "react";
 import { Bell, MessageCircle } from "lucide-react";
+import SignupAnimatedBackground from "@/components/SignupAnimatedBackground";
 
 export default function AnnouncementsPage() {
   const { username } = useAuth();
@@ -30,17 +31,7 @@ export default function AnnouncementsPage() {
   );
   
   return (
-    <div 
-      className="min-h-screen text-white p-6 relative overflow-hidden"
-      style={{
-        backgroundImage: 'url(/api/image/360_F_819000674_C4KBdZyevZiKOZUXUqDnx7Vq1Hjskq3g.jpg)',
-        backgroundSize: 'cover',
-        backgroundPosition: 'center',
-        backgroundRepeat: 'no-repeat'
-      }}
-    >
-      {/* Animated gradient overlay */}
-      <div className="absolute inset-0 bg-gradient-to-br from-black/40 via-black/50 to-black/60"></div>
+    <SignupAnimatedBackground elementCount={20} className="text-white">
       
       {/* Decorative elements */}
       <div className="absolute top-20 left-10 w-32 h-32 bg-blue-500/10 rounded-full blur-3xl animate-pulse"></div>
@@ -189,6 +180,6 @@ export default function AnnouncementsPage() {
           --tw-prose-td-borders: rgba(255, 255, 255, 0.1);
         }
       `}</style>
-    </div>
+    </SignupAnimatedBackground>
   );
 }

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useAuth } from '@/lib/auth';
 import { Button } from '@/components/ui/button';
+import SignupAnimatedBackground from '@/components/SignupAnimatedBackground';
 import { CheckCircle, Clock, AlertCircle, Image, Users, Zap } from 'lucide-react';
 
 type Task = {
@@ -222,17 +223,7 @@ export default function TasksPage() {
   };
 
   return (
-    <div 
-      className="min-h-screen text-white p-6 relative overflow-hidden"
-      style={{
-        backgroundImage: 'url(/api/image/golden-sunset-hd-backgrounds-captivatings-for-serene-scenes-photo.jpg)',
-        backgroundSize: 'cover',
-        backgroundPosition: 'center',
-        backgroundRepeat: 'no-repeat'
-      }}
-    >
-      {/* Animated gradient overlay */}
-      <div className="absolute inset-0 bg-gradient-to-br from-black/40 via-black/50 to-black/60"></div>
+    <SignupAnimatedBackground elementCount={20} className="text-white">
       
       {/* Decorative elements */}
       <div className="absolute top-20 left-10 w-32 h-32 bg-orange-500/10 rounded-full blur-3xl animate-pulse"></div>
@@ -523,6 +514,6 @@ export default function TasksPage() {
           animation: fadeInUp 0.6s ease-out forwards;
         }
       `}</style>
-    </div>
+    </SignupAnimatedBackground>
   );
 }

@@ -2,6 +2,7 @@ import { useAuth } from "@/lib/auth";
 import { useEffect, useState } from "react";
 import { FileUp, Check, Clock, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import SignupAnimatedBackground from "@/components/SignupAnimatedBackground";
 
 export default function AssignmentsPage() {
   const { username } = useAuth();
@@ -84,17 +85,7 @@ export default function AssignmentsPage() {
   };
   
   return (
-    <div 
-      className="min-h-screen text-white p-6 relative overflow-hidden"
-      style={{
-        backgroundImage: 'url(/api/image/stunning-high-resolution-nature-and-landscape-backgrounds-breathtaking-scenery-in-hd-photo.jpg)',
-        backgroundSize: 'cover',
-        backgroundPosition: 'center',
-        backgroundRepeat: 'no-repeat'
-      }}
-    >
-      {/* Animated gradient overlay */}
-      <div className="absolute inset-0 bg-gradient-to-br from-black/40 via-black/50 to-black/60"></div>
+    <SignupAnimatedBackground elementCount={20} className="text-white">
       
       {/* Decorative elements */}
       <div className="absolute top-20 left-10 w-32 h-32 bg-blue-500/10 rounded-full blur-3xl animate-pulse"></div>
@@ -201,7 +192,7 @@ export default function AssignmentsPage() {
                           ) : (
                             <div className="space-y-3">
                               <p className="text-sm text-white/80">📤 Upload your assignment (PDF, DOC, or DOCX)</p>
-                              <label className="block">
+                              <label className="block" onClick={(e) => e.stopPropagation()}>
                                 <input 
                                   type="file" 
                                   multiple 
@@ -214,13 +205,16 @@ export default function AssignmentsPage() {
                                   uploadingId === a.id 
                                     ? 'bg-white/10 border-white/30' 
                                     : 'border-white/30 hover:border-white/50 hover:bg-white/10'
-                                }`}>
+                                }`} onClick={(e) => e.stopPropagation()}>
                                   <FileUp size={20} className="text-emerald-300" />
                                   <span className="text-sm font-medium text-white/80">
                                     {uploadingId === a.id ? 'Uploading...' : 'Click to select files'}
                                   </span>
                                 </div>
                               </label>
+                              <p className="text-xs text-white/55 mt-2" onClick={(e) => e.stopPropagation()}>
+                                Uploaded files are saved in your assignment submission record on the server. Points are awarded after teacher review, not immediately on upload.
+                              </p>
                             </div>
                           )}
                         </div>
@@ -246,6 +240,6 @@ export default function AssignmentsPage() {
           }
         }
       `}</style>
-    </div>
+    </SignupAnimatedBackground>
   );
 }

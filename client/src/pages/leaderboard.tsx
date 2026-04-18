@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card";
 import { Button } from "@/components/ui/button";
+import SignupAnimatedBackground from "@/components/SignupAnimatedBackground";
 import { ArrowLeft, Crown, School, Search, Trophy, Users } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 
@@ -162,17 +163,7 @@ export default function LeaderboardPage() {
   };
 
   return (
-    <div 
-      className="min-h-screen text-white p-6 relative overflow-hidden"
-      style={{
-        backgroundImage: 'url(/api/image/pexels-thatguycraig000-1563356.jpg)',
-        backgroundSize: 'cover',
-        backgroundPosition: 'center',
-        backgroundRepeat: 'no-repeat'
-      }}
-    >
-      {/* Animated gradient overlay */}
-      <div className="absolute inset-0 bg-gradient-to-br from-black/40 via-black/50 to-black/60"></div>
+    <SignupAnimatedBackground elementCount={20} className="text-white">
       
       {/* Decorative elements */}
       <div className="absolute top-20 left-10 w-32 h-32 bg-yellow-500/10 rounded-full blur-3xl animate-pulse"></div>
@@ -399,7 +390,7 @@ export default function LeaderboardPage() {
       </div>
 
       <style>{animationStyles}</style>
-    </div>
+    </SignupAnimatedBackground>
   );
 }
 

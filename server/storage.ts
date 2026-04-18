@@ -44,6 +44,8 @@ export interface IStorage {
   listAnnouncementsForTeacher(teacherUsername: string): Promise<Announcement[]>;
   createAdminAnnouncement(adminUsername: string, input: { title: string; body?: string }): Promise<{ ok: true; announcement: Announcement } | { ok: false; error: string }>;
   listAdminAnnouncements(adminUsername: string): Promise<Announcement[]>;
+  updateAdminAnnouncement(adminUsername: string, announcementId: string, updates: { title?: string; body?: string }): Promise<{ ok: true; announcement: Announcement } | { ok: false; error: string }>;
+  deleteAdminAnnouncement(adminUsername: string, announcementId: string): Promise<{ ok: true } | { ok: false; error: string }>;
   listStudentAnnouncements(studentUsername: string): Promise<Announcement[]>;
   // Groups
   createTaskGroup(studentUsername: string, taskId: string, members: string[]): Promise<{ ok: true; group: TaskGroup & { memberUsernames: string[] } } | { ok: false; error: string }>;
@@ -57,6 +59,10 @@ export interface IStorage {
   // Learning modules
   listLessonCompletions(studentUsername: string): Promise<LessonCompletion[]>;
   completeLesson(studentUsername: string, input: { moduleId: string; moduleTitle: string; lessonId: string; lessonTitle: string; points: number }): Promise<{ ok: true; completion: LessonCompletion; alreadyCompleted: boolean } | { ok: false; error: string }>;
+  listLearningModules(): Promise<LearningModule[]>;
+  listManagedLearningModules(managerUsername: string): Promise<LearningModule[]>;
+  upsertManagedLearningModule(managerUsername: string, input: { id?: string; title: string; description?: string; lessons: Array<{ id?: string; title: string; duration?: string; points: number; content?: string }> }): Promise<{ ok: true; module: LearningModule } | { ok: false; error: string }>;
+  deleteManagedLearningModule(managerUsername: string, moduleId: string): Promise<{ ok: true } | { ok: false; error: string }>;
   // Activity logging & notifications
   addQuizAttempt(studentUsername: string, input: { quizId: string; answers?: number[]; scorePercent?: number }): Promise<{ ok: true; attempt: QuizAttempt } | { ok: false; error: string }>;
   getStudentQuizAttempt(username: string, quizId: string): Promise<QuizAttempt | null>;
@@ -72,14 +78,16 @@ export interface IStorage {
   // Games catalog (admin-managed)
   listGames(): Promise<Game[]>;
   listAdminGames(adminUsername: string): Promise<Game[]>;
-  createAdminGame(adminUsername: string, input: { id?: string; name: string; category: string; description?: string; difficulty?: 'Easy'|'Medium'|'Hard'; points: number; icon?: string }): Promise<{ ok: true; game: Game } | { ok: false; error: string }>;
-  updateAdminGame(adminUsername: string, gameId: string, updates: Partial<{ name: string; category: string; description?: string; difficulty?: 'Easy'|'Medium'|'Hard'; points: number; icon?: string }>): Promise<{ ok: true; game: Game } | { ok: false; error: string }>;
+  createAdminGame(adminUsername: string, input: { id?: string; name: string; category: string; description?: string; difficulty?: 'Easy'|'Medium'|'Hard'; points: number; icon?: string; externalUrl: string; image?: string }): Promise<{ ok: true; game: Game } | { ok: false; error: string }>;
+  updateAdminGame(adminUsername: string, gameId: string, updates: Partial<{ name: string; category: string; description?: string; difficulty?: 'Easy'|'Medium'|'Hard'; points: number; icon?: string; externalUrl: string; image?: string }>): Promise<{ ok: true; game: Game } | { ok: false; error: string }>;
   deleteAdminGame(adminUsername: string, gameId: string): Promise<{ ok: true } | { ok: false; error: string }>;
   // Assignments
   createAssignment(teacherUsername: string, input: { title: string; description?: string; deadline?: string; maxPoints?: number }): Promise<{ ok: true; assignment: Assignment } | { ok: false; error: string }>;
   listTeacherAssignments(teacherUsername: string): Promise<Assignment[]>;
   createAdminAssignment(adminUsername: string, input: { title: string; description?: string; deadline?: string; maxPoints?: number }): Promise<{ ok: true; assignment: Assignment } | { ok: false; error: string }>;
   listAdminAssignments(adminUsername: string): Promise<Assignment[]>;
+  updateAdminAssignment(adminUsername: string, assignmentId: string, updates: { title?: string; description?: string; deadline?: string; maxPoints?: number }): Promise<{ ok: true; assignment: Assignment } | { ok: false; error: string }>;
+  deleteAdminAssignment(adminUsername: string, assignmentId: string): Promise<{ ok: true } | { ok: false; error: string }>;
   listStudentAssignments(studentUsername: string): Promise<Array<{ assignment: Assignment; submission?: AssignmentSubmission }>>;
   submitAssignment(studentUsername: string, assignmentId: string, filesOrList: string | string[]): Promise<{ ok: true; submission: AssignmentSubmission } | { ok: false; error: string }>;
   listAssignmentSubmissionsForTeacher(teacherUsername: string, assignmentId?: string): Promise<Array<AssignmentSubmission & { studentUsername: string; studentName?: string; className?: string; section?: string; assignmentMaxPoints?: number }>>;
@@ -129,12 +137,16 @@ export class MemStorage implements IStorage {
   private gamePlays: Map<string, GamePlay>;
   private games: Map<string, Game>;
   private lessonCompletions: Map<string, LessonCompletion>;
+  private learningModules: Map<string, LearningModule>;
   private notifications: Map<string, NotificationItem>;
   private lastGamePlay: Map<string, number>; // key: studentId|gameId -> ts
   private videos: Map<string, Video>;
   private userVideoProgress: Map<string, UserVideoProgress>;
   private userCredits: Map<string, UserCredits>;
   private dataFile: string;
+  private saveTimer: ReturnType<typeof setTimeout> | null;
+  private saveInFlight: boolean;
+  private saveRequestedWhileWriting: boolean;
 
   constructor() {
     this.users = new Map();
@@ -155,12 +167,16 @@ export class MemStorage implements IStorage {
   this.gamePlays = new Map();
   this.games = new Map();
   this.lessonCompletions = new Map();
+  this.learningModules = new Map();
   this.notifications = new Map();
   this.lastGamePlay = new Map();
   this.videos = new Map();
   this.userVideoProgress = new Map();
   this.userCredits = new Map();
   this.dataFile = path.join(process.cwd(), 'server', 'data.json');
+  this.saveTimer = null;
+  this.saveInFlight = false;
+  this.saveRequestedWhileWriting = false;
 
     // Load from disk if available; otherwise seed defaults and save
   if (fs.existsSync(this.dataFile)) {
@@ -184,6 +200,7 @@ export class MemStorage implements IStorage {
   for (const gp of raw.gamePlays ?? []) this.gamePlays.set(gp.id, gp);
   for (const g of raw.games ?? []) this.games.set(g.id, g);
   for (const lc of raw.lessonCompletions ?? []) this.lessonCompletions.set(lc.id, lc);
+  for (const m of raw.learningModules ?? []) this.learningModules.set(m.id, m);
   for (const n of raw.notifications ?? []) this.notifications.set(n.id, n);
   for (const v of raw.videos ?? []) this.videos.set(v.id, v);
   for (const p of raw.userVideoProgress ?? []) this.userVideoProgress.set(p.id, p);
@@ -371,21 +388,38 @@ export class MemStorage implements IStorage {
   }
 
   private ensureDemoGames() {
-    // Seed a small default set if empty; align with client catalog ids
-    if (this.games.size > 0) return;
+    // Keep a rich default catalog in sync with public games, while preserving custom/admin-added games.
     const base: Array<Omit<Game,'id'|'createdAt'|'createdByUserId'>> = [
-      { name: 'Waste Segregation', category: 'recycling', description: 'Drag items into the correct bins.', difficulty: 'Easy', points: 5, icon: '♻️' },
-      { name: 'Eco-Home Challenge', category: 'habits', description: 'Fix bad habits in a room.', difficulty: 'Easy', points: 8, icon: '🏠' },
-      { name: 'Recycling Factory Puzzle', category: 'recycling', description: 'Reorder the factory line correctly.', difficulty: 'Medium', points: 20, icon: '🏭' },
-      { name: 'Ocean Cleanup', category: 'recycling', description: 'Collect plastic, avoid fish.', difficulty: 'Easy', points: 10, icon: '🚤' },
+      { name: 'SeaVerse: Ocean Guardian', category: 'wildlife', description: 'Protect and restore our oceans. Complete missions to save marine life, stop pollution, and learn about ocean conservation.', difficulty: 'Medium', points: 100, icon: '🌊', externalUrl: '/embedded-games/index.html', image: '/api/image/360_F_819000674_C4KBdZyevZiKOZUXUqDnx7Vq1Hjskq3g.jpg' },
+      { name: 'Eco Word Spell', category: 'fun', description: 'Build environmental vocabulary by spelling eco-themed words in a fast, fun challenge.', difficulty: 'Easy', points: 75, icon: '🔤', externalUrl: 'https://eco-word-spell.lovable.app/', image: '/api/image/1080p-nature-background-nfkrrkh7da3eonyn.jpg' },
+      { name: 'Sorting Stories', category: 'recycling', description: 'Sort choices in story-based scenarios to practice better waste and recycling decisions.', difficulty: 'Easy', points: 80, icon: '📚', externalUrl: 'https://sorting-stories-game.lovable.app/', image: '/api/image/360_F_628835191_EMMgdwXxjtd3yLBUguiz5UrxaxqByvUc.jpg' },
+      { name: 'Eco Arrow Harmony', category: 'climate', description: 'Follow eco-guided arrow flows to learn sustainable pathways in an interactive challenge.', difficulty: 'Medium', points: 85, icon: '🎯', externalUrl: 'https://eco-arrow-harmony.lovable.app/', image: '/api/image/golden-sunset-hd-backgrounds-captivatings-for-serene-scenes-photo.jpg' },
+      { name: 'Eco Balance Grid', category: 'habits', description: 'Balance environmental choices on a grid to build smart, sustainable daily habits.', difficulty: 'Medium', points: 90, icon: '🧩', externalUrl: 'https://eco-balance-grid.lovable.app/', image: '/api/image/beautiful-morning-view-indonesia-panorama-landscape-paddy-fields-with-beauty-color-and-sky-natural-light-photo.jpg' },
+      { name: 'Bad Gas Hunter', category: 'climate', description: 'Hunt down harmful emissions and boost cleaner air through fast action.', difficulty: 'Medium', points: 95, icon: '🛰️', externalUrl: 'https://badgashunter.netlify.app/', image: '/api/image/background-pictures-nature-hd-images-1920x1200-wallpaper-preview.jpg' },
+      { name: 'Eco Hit', category: 'fun', description: 'Quick reflex eco challenge: hit the right sustainability targets and rack up points.', difficulty: 'Easy', points: 85, icon: '🎯', externalUrl: 'https://eco-hit.netlify.app/', image: '/api/image/nature-319.jpg' },
+      { name: 'Eco Shoot', category: 'wildlife', description: 'Action-packed shooter experience with an environmental mission focus.', difficulty: 'Hard', points: 120, icon: '🚀', externalUrl: 'https://ecoshoot.netlify.app/', image: '/api/image/b1573252592009209d45a186360dea8c.jpg' },
+      { name: 'Matching Pairs Date', category: 'fun', description: 'A fast memory and matching challenge with a playful date-night style twist.', difficulty: 'Easy', points: 75, icon: '💞', externalUrl: 'https://matchingpairsdate.netlify.app/', image: '/api/image/Bhpd8.jpg' },
+      { name: 'Tsunami Expedition', category: 'climate', description: 'Explore wave and disaster awareness through a challenge built around environmental resilience.', difficulty: 'Medium', points: 95, icon: '🌊', externalUrl: 'https://tsunamiexp.netlify.app/', image: '/api/image/pngtree-abstract-cloudy-background-beautiful-natural-streaks-of-sky-and-clouds-red-image_15684333.jpg' },
+      { name: 'Mineral Expedition', category: 'wildlife', description: 'Discover mineral-themed exploration in a guided adventure focused on terrain and earth science.', difficulty: 'Medium', points: 90, icon: '⛏️', externalUrl: 'https://mineralexp.netlify.app/', image: '/api/image/pngtree-cb-background-hd-2022-download-picsart-and-snapseed-photo-editing-picture-image_15546523.jpg' },
+      { name: 'Environment Word Explorer', category: 'fun', description: 'Explore and master environmental words in a fun, educational game session.', difficulty: 'Easy', points: 80, icon: '📖', externalUrl: 'https://evironmentwordexplorer.netlify.app/', image: '/api/image/stunning-high-resolution-nature-and-landscape-backgrounds-breathtaking-scenery-in-hd-photo.jpg' },
+      { name: 'AcquaMind', category: 'habits', description: 'Interactive water-awareness challenge focused on smarter use, conservation habits, and environmental impact.', difficulty: 'Medium', points: 95, icon: '💧', externalUrl: 'https://acquamind.netlify.app/', image: '/api/image/stunning-high-resolution-nature-and-landscape-backgrounds-breathtaking-scenery-in-hd-photo.jpg' },
+      { name: 'Waste Segregation', category: 'recycling', description: 'Drag items into the correct bins.', difficulty: 'Easy', points: 5, icon: '♻️', externalUrl: '/games/' },
+      { name: 'Eco-Home Challenge', category: 'habits', description: 'Fix bad habits in a room.', difficulty: 'Easy', points: 8, icon: '🏠', externalUrl: '/games/' },
+      { name: 'Recycling Factory Puzzle', category: 'recycling', description: 'Reorder the factory line correctly.', difficulty: 'Medium', points: 20, icon: '🏭', externalUrl: '/games/' },
+      { name: 'Ocean Cleanup', category: 'recycling', description: 'Collect plastic, avoid fish.', difficulty: 'Easy', points: 10, icon: '🚤', externalUrl: '/games/' },
     ];
     const adminEntry = Array.from(this.users.entries()).find(([,u]) => u.username === 'admin123');
     const adminId = adminEntry?.[0] || Array.from(this.users.keys())[0];
     const now = Date.now();
+    let added = false;
     base.forEach((b, i) => {
       const id = (b.name || `Game ${i+1}`).toLowerCase().replace(/[^a-z0-9]+/g,'-');
-      this.games.set(id, { id, ...b, createdAt: now + i, createdByUserId: adminId || '' });
+      if (!this.games.has(id)) {
+        this.games.set(id, { id, ...b, createdAt: now + i, createdByUserId: adminId || '' });
+        added = true;
+      }
     });
+    if (added) this.save();
   }
 
   // Seed a few sample announcements & assignments for admin and the demo teacher
@@ -538,8 +572,8 @@ export class MemStorage implements IStorage {
     });
   }
 
-  private save() {
-    const payload = {
+  private buildPayload() {
+    return {
       users: Array.from(this.users.values()),
       roles: Object.fromEntries(this.roles.entries()),
       schools: Array.from(this.schools.values()),
@@ -557,16 +591,39 @@ export class MemStorage implements IStorage {
   gamePlays: Array.from(this.gamePlays.values()),
   games: Array.from(this.games.values()),
   lessonCompletions: Array.from(this.lessonCompletions.values()),
+  learningModules: Array.from(this.learningModules.values()),
   notifications: Array.from(this.notifications.values()),
   videos: Array.from(this.videos.values()),
   userVideoProgress: Array.from(this.userVideoProgress.values()),
   userCredits: Array.from(this.userCredits.values()),
     };
+  }
+
+  private async flushSave() {
+    if (this.saveInFlight) {
+      this.saveRequestedWhileWriting = true;
+      return;
+    }
+    this.saveInFlight = true;
     try {
-      fs.writeFileSync(this.dataFile, JSON.stringify(payload, null, 2), 'utf-8');
+      do {
+        this.saveRequestedWhileWriting = false;
+        const payload = this.buildPayload();
+        await fs.promises.writeFile(this.dataFile, JSON.stringify(payload, null, 2), 'utf-8');
+      } while (this.saveRequestedWhileWriting);
     } catch {
       // ignore persistence failure in demo
+    } finally {
+      this.saveInFlight = false;
     }
+  }
+
+  private save() {
+    if (this.saveTimer) return;
+    this.saveTimer = setTimeout(() => {
+      this.saveTimer = null;
+      void this.flushSave();
+    }, 25);
   }
 
   async getUser(id: string): Promise<User | undefined> {
@@ -1244,6 +1301,109 @@ export class MemStorage implements IStorage {
     return { ok: true as const, completion, alreadyCompleted: false as const };
   }
 
+  async listLearningModules(): Promise<LearningModule[]> {
+    return Array.from(this.learningModules.values())
+      .sort((a, b) => a.createdAt - b.createdAt)
+      .map((m) => ({ ...m, lessons: m.lessons.map((l) => ({ ...l })) }));
+  }
+
+  async listManagedLearningModules(managerUsername: string): Promise<LearningModule[]> {
+    const entry = this.findUserEntryByUsername(managerUsername);
+    if (!entry) return [];
+    const [uid] = entry;
+    const role = this.roles.get(uid);
+    if (role !== 'admin' && role !== 'teacher') return [];
+    return await this.listLearningModules();
+  }
+
+  async upsertManagedLearningModule(managerUsername: string, input: { id?: string; title: string; description?: string; lessons: Array<{ id?: string; title: string; duration?: string; points: number; content?: string }> }) {
+    const entry = this.findUserEntryByUsername(managerUsername);
+    if (!entry) return { ok: false as const, error: 'User not found' };
+    const [uid] = entry;
+    const role = this.roles.get(uid);
+    if (role !== 'admin' && role !== 'teacher') return { ok: false as const, error: 'Not allowed' };
+
+    const title = String(input?.title || '').trim();
+    if (!title) return { ok: false as const, error: 'Module title is required' };
+
+    const nextId = (String(input?.id || '').trim() || title.toLowerCase())
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '');
+    if (!nextId) return { ok: false as const, error: 'Invalid module id' };
+
+    const rawLessons = Array.isArray(input?.lessons) ? input.lessons : [];
+    if (rawLessons.length === 0) return { ok: false as const, error: 'At least one lesson is required' };
+
+    const lessons: LearningLesson[] = [];
+    const seenLessonIds = new Set<string>();
+    for (let i = 0; i < rawLessons.length; i++) {
+      const raw = rawLessons[i] || ({} as any);
+      const lessonTitle = String(raw.title || '').trim();
+      if (!lessonTitle) return { ok: false as const, error: `Lesson ${i + 1} title is required` };
+      const lessonId = (String(raw.id || '').trim() || lessonTitle.toLowerCase())
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '');
+      if (!lessonId) return { ok: false as const, error: `Lesson ${i + 1} id is invalid` };
+      if (seenLessonIds.has(lessonId)) return { ok: false as const, error: `Duplicate lesson id: ${lessonId}` };
+      seenLessonIds.add(lessonId);
+
+      let points = Math.floor(Number(raw.points));
+      if (!Number.isFinite(points) || points < 1) points = 1;
+      if (points > 500) points = 500;
+
+      lessons.push({
+        id: lessonId,
+        title: lessonTitle,
+        duration: String(raw.duration || '').trim() || '10 minutes',
+        points,
+        content: String(raw.content || '').trim() || `<h2>${lessonTitle}</h2><p>Lesson content coming soon.</p>`,
+      });
+    }
+
+    const existing = this.learningModules.get(nextId);
+    const module: LearningModule = {
+      id: nextId,
+      title,
+      description: String(input?.description || '').trim(),
+      lessons,
+      createdAt: existing?.createdAt || Date.now(),
+      updatedAt: Date.now(),
+      createdByUserId: existing?.createdByUserId || uid,
+      updatedByUserId: uid,
+      deleted: false,
+    };
+
+    this.learningModules.set(module.id, module);
+    this.save();
+    return { ok: true as const, module };
+  }
+
+  async deleteManagedLearningModule(managerUsername: string, moduleId: string) {
+    const entry = this.findUserEntryByUsername(managerUsername);
+    if (!entry) return { ok: false as const, error: 'User not found' };
+    const [uid] = entry;
+    const role = this.roles.get(uid);
+    if (role !== 'admin' && role !== 'teacher') return { ok: false as const, error: 'Not allowed' };
+
+    const id = String(moduleId || '').trim();
+    if (!id) return { ok: false as const, error: 'Module id is required' };
+    const existing = this.learningModules.get(id);
+    const tombstone: LearningModule = {
+      id,
+      title: existing?.title || id,
+      description: existing?.description || '',
+      lessons: existing?.lessons || [],
+      createdAt: existing?.createdAt || Date.now(),
+      updatedAt: Date.now(),
+      createdByUserId: existing?.createdByUserId || uid,
+      updatedByUserId: uid,
+      deleted: true,
+    };
+    this.learningModules.set(id, tombstone);
+    this.save();
+    return { ok: true as const };
+  }
+
   // Admin accounts
   async listAdmins() {
     const list: Array<{ username: string; name?: string; email?: string }> = [];
@@ -1569,9 +1729,11 @@ export class MemStorage implements IStorage {
     if (!input?.title || !String(input.title).trim()) return { ok: false as const, error: 'Title required' };
     const ann: Announcement = { id: randomUUID(), title: String(input.title).trim(), body: input.body ? String(input.body) : '', createdAt: Date.now(), createdByUserId: aid, schoolId: '', visibility: 'global' };
     this.announcements.set(ann.id, ann);
-    // Broadcast to all students
-    this.users.forEach((u, id) => { if (this.roles.get(id) === 'student') this.addNotificationForUserId(id, `Global announcement: ${ann.title}`, 'announcement'); });
+    // Persist the announcement immediately in batched async mode, then fan out notifications off the critical request path.
     this.save();
+    setTimeout(() => {
+      this.users.forEach((u, id) => { if (this.roles.get(id) === 'student') this.addNotificationForUserId(id, `Global announcement: ${ann.title}`, 'announcement'); });
+    }, 0);
     return { ok: true as const, announcement: ann };
   }
   async listAdminAnnouncements(adminUsername: string) {
@@ -1580,6 +1742,34 @@ export class MemStorage implements IStorage {
     const [aid] = entry;
     if (this.roles.get(aid) !== 'admin') return [] as Announcement[];
     return Array.from(this.announcements.values()).filter(a => a.visibility === 'global').sort((a,b)=>b.createdAt-a.createdAt);
+  }
+  async updateAdminAnnouncement(adminUsername: string, announcementId: string, updates: { title?: string; body?: string }) {
+    const entry = this.findUserEntryByUsername(adminUsername);
+    if (!entry) return { ok: false as const, error: 'Admin not found' };
+    const [aid] = entry;
+    if (this.roles.get(aid) !== 'admin') return { ok: false as const, error: 'Not an admin' };
+    const ann = this.announcements.get(announcementId);
+    if (!ann) return { ok: false as const, error: 'Announcement not found' };
+    if (ann.visibility !== 'global') return { ok: false as const, error: 'Only global announcements can be edited here' };
+    const title = updates.title !== undefined ? String(updates.title).trim() : ann.title;
+    if (!title) return { ok: false as const, error: 'Title required' };
+    const body = updates.body !== undefined ? String(updates.body) : (ann.body || '');
+    const updated = { ...ann, title, body };
+    this.announcements.set(announcementId, updated);
+    this.save();
+    return { ok: true as const, announcement: updated };
+  }
+  async deleteAdminAnnouncement(adminUsername: string, announcementId: string) {
+    const entry = this.findUserEntryByUsername(adminUsername);
+    if (!entry) return { ok: false as const, error: 'Admin not found' };
+    const [aid] = entry;
+    if (this.roles.get(aid) !== 'admin') return { ok: false as const, error: 'Not an admin' };
+    const ann = this.announcements.get(announcementId);
+    if (!ann) return { ok: false as const, error: 'Announcement not found' };
+    if (ann.visibility !== 'global') return { ok: false as const, error: 'Only global announcements can be deleted here' };
+    this.announcements.delete(announcementId);
+    this.save();
+    return { ok: true as const };
   }
   async listStudentAnnouncements(studentUsername: string) {
     const entry = this.findUserEntryByUsername(studentUsername);
@@ -1639,6 +1829,42 @@ export class MemStorage implements IStorage {
     const [aid] = entry;
     if (this.roles.get(aid) !== 'admin') return [] as Assignment[];
     return Array.from(this.assignments.values()).filter(a => a.visibility === 'global').sort((a,b)=>b.createdAt-a.createdAt);
+  }
+  async updateAdminAssignment(adminUsername: string, assignmentId: string, updates: { title?: string; description?: string; deadline?: string; maxPoints?: number }) {
+    const entry = this.findUserEntryByUsername(adminUsername);
+    if (!entry) return { ok: false as const, error: 'Admin not found' };
+    const [aid] = entry;
+    if (this.roles.get(aid) !== 'admin') return { ok: false as const, error: 'Not an admin' };
+    const asn = this.assignments.get(assignmentId);
+    if (!asn) return { ok: false as const, error: 'Assignment not found' };
+    if (asn.visibility !== 'global') return { ok: false as const, error: 'Only global assignments can be edited here' };
+    const title = updates.title !== undefined ? String(updates.title).trim() : asn.title;
+    if (!title) return { ok: false as const, error: 'Title required' };
+    let maxPoints = updates.maxPoints !== undefined ? Number(updates.maxPoints) : asn.maxPoints;
+    if (!Number.isFinite(maxPoints)) maxPoints = asn.maxPoints;
+    maxPoints = Math.max(1, Math.min(10, Math.floor(maxPoints)));
+    const updated = {
+      ...asn,
+      title,
+      description: updates.description !== undefined ? String(updates.description) : (asn.description || ''),
+      deadline: updates.deadline !== undefined ? updates.deadline : asn.deadline,
+      maxPoints,
+    };
+    this.assignments.set(assignmentId, updated);
+    this.save();
+    return { ok: true as const, assignment: updated };
+  }
+  async deleteAdminAssignment(adminUsername: string, assignmentId: string) {
+    const entry = this.findUserEntryByUsername(adminUsername);
+    if (!entry) return { ok: false as const, error: 'Admin not found' };
+    const [aid] = entry;
+    if (this.roles.get(aid) !== 'admin') return { ok: false as const, error: 'Not an admin' };
+    const asn = this.assignments.get(assignmentId);
+    if (!asn) return { ok: false as const, error: 'Assignment not found' };
+    if (asn.visibility !== 'global') return { ok: false as const, error: 'Only global assignments can be deleted here' };
+    this.assignments.delete(assignmentId);
+    this.save();
+    return { ok: true as const };
   }
 
   // ===== Student: discover assignments and submit =====
@@ -2053,6 +2279,8 @@ export class MemStorage implements IStorage {
 
   // ===== Games Catalog (Admin-managed) =====
   async listGames(): Promise<Game[]> {
+    // Keep default games available even if data.json started with a partial set.
+    this.ensureDemoGames();
     // Public list (no auth). Sorted by createdAt desc.
     return Array.from(this.games.values()).sort((a,b)=> b.createdAt - a.createdAt);
   }
@@ -2061,18 +2289,23 @@ export class MemStorage implements IStorage {
     const entry = this.findUserEntryByUsername(adminUsername);
     if (!entry) return [] as Game[];
     const [aid] = entry;
-    if (this.roles.get(aid) !== 'admin') return [] as Game[];
+    const role = this.roles.get(aid);
+    if (role !== 'admin' && role !== 'teacher') return [] as Game[];
     return await this.listGames();
   }
 
-  async createAdminGame(adminUsername: string, input: { id?: string; name: string; category: string; description?: string; difficulty?: 'Easy'|'Medium'|'Hard'; points: number; icon?: string }) {
+  async createAdminGame(adminUsername: string, input: { id?: string; name: string; category: string; description?: string; difficulty?: 'Easy'|'Medium'|'Hard'; points: number; icon?: string; externalUrl: string; image?: string }) {
     const entry = this.findUserEntryByUsername(adminUsername);
-    if (!entry) return { ok: false as const, error: 'Admin not found' };
+    if (!entry) return { ok: false as const, error: 'User not found' };
     const [aid] = entry;
-    if (this.roles.get(aid) !== 'admin') return { ok: false as const, error: 'Not an admin' };
+    const role = this.roles.get(aid);
+    if (role !== 'admin' && role !== 'teacher') return { ok: false as const, error: 'Not allowed' };
     const name = String(input?.name || '').trim();
     const category = String(input?.category || '').trim().toLowerCase();
     if (!name || !category) return { ok: false as const, error: 'Name and category required' };
+    if (!['recycling', 'climate', 'habits', 'wildlife', 'fun'].includes(category)) return { ok: false as const, error: 'Invalid category' };
+    const externalUrl = String(input?.externalUrl || '').trim();
+    if (!externalUrl) return { ok: false as const, error: 'Game link is required' };
     const id = (input.id?.trim() || name.toLowerCase()).replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
     if (!id) return { ok: false as const, error: 'Invalid id' };
     if (this.games.has(id)) return { ok: false as const, error: 'ID already exists' };
@@ -2088,6 +2321,8 @@ export class MemStorage implements IStorage {
       difficulty,
       points,
       icon: input.icon ? String(input.icon) : undefined,
+      externalUrl,
+      image: input.image ? String(input.image).trim() : undefined,
       createdAt: Date.now(),
       createdByUserId: aid,
     };
@@ -2096,18 +2331,29 @@ export class MemStorage implements IStorage {
     return { ok: true as const, game };
   }
 
-  async updateAdminGame(adminUsername: string, gameId: string, updates: Partial<{ name: string; category: string; description?: string; difficulty?: 'Easy'|'Medium'|'Hard'; points: number; icon?: string }>) {
+  async updateAdminGame(adminUsername: string, gameId: string, updates: Partial<{ name: string; category: string; description?: string; difficulty?: 'Easy'|'Medium'|'Hard'; points: number; icon?: string; externalUrl: string; image?: string }>) {
     const entry = this.findUserEntryByUsername(adminUsername);
-    if (!entry) return { ok: false as const, error: 'Admin not found' };
+    if (!entry) return { ok: false as const, error: 'User not found' };
     const [aid] = entry;
-    if (this.roles.get(aid) !== 'admin') return { ok: false as const, error: 'Not an admin' };
+    const role = this.roles.get(aid);
+    if (role !== 'admin' && role !== 'teacher') return { ok: false as const, error: 'Not allowed' };
     const g = this.games.get(gameId);
     if (!g) return { ok: false as const, error: 'Game not found' };
     const next: Game = { ...g };
     if (typeof updates.name === 'string') next.name = updates.name.trim() || next.name;
-    if (typeof updates.category === 'string') next.category = updates.category.trim().toLowerCase() || next.category;
+    if (typeof updates.category === 'string') {
+      const category = updates.category.trim().toLowerCase();
+      if (!['recycling', 'climate', 'habits', 'wildlife', 'fun'].includes(category)) return { ok: false as const, error: 'Invalid category' };
+      next.category = category || next.category;
+    }
     if (typeof updates.description === 'string') next.description = updates.description;
     if (typeof updates.icon === 'string') next.icon = updates.icon;
+    if (typeof updates.externalUrl === 'string') {
+      const url = updates.externalUrl.trim();
+      if (!url) return { ok: false as const, error: 'Game link is required' };
+      next.externalUrl = url;
+    }
+    if (typeof updates.image === 'string') next.image = updates.image.trim() || undefined;
     if (typeof updates.points !== 'undefined') {
       let p = Math.floor(Number(updates.points));
       if (!Number.isFinite(p) || p < 1) p = 1;
@@ -2124,9 +2370,10 @@ export class MemStorage implements IStorage {
 
   async deleteAdminGame(adminUsername: string, gameId: string) {
     const entry = this.findUserEntryByUsername(adminUsername);
-    if (!entry) return { ok: false as const, error: 'Admin not found' };
+    if (!entry) return { ok: false as const, error: 'User not found' };
     const [aid] = entry;
-    if (this.roles.get(aid) !== 'admin') return { ok: false as const, error: 'Not an admin' };
+    const role = this.roles.get(aid);
+    if (role !== 'admin' && role !== 'teacher') return { ok: false as const, error: 'Not allowed' };
     if (!this.games.has(gameId)) return { ok: false as const, error: 'Game not found' };
     this.games.delete(gameId);
     this.save();
@@ -2485,6 +2732,26 @@ export type LessonCompletion = {
   completedAt: number;
 };
 
+export type LearningLesson = {
+  id: string;
+  title: string;
+  duration: string;
+  points: number;
+  content: string;
+};
+
+export type LearningModule = {
+  id: string;
+  title: string;
+  description?: string;
+  lessons: LearningLesson[];
+  createdAt: number;
+  updatedAt: number;
+  createdByUserId: string;
+  updatedByUserId: string;
+  deleted?: boolean;
+};
+
 // Weekly streak (Mon..Sun)
 export type WeeklyStreak = {
   start: number; // Monday start timestamp
@@ -2517,6 +2784,8 @@ export type Game = {
   difficulty?: 'Easy' | 'Medium' | 'Hard';
   points: number; // credit awarded first time completed
   icon?: string; // emoji or icon name
+  externalUrl?: string; // optional hosted/custom game link
+  image?: string; // optional photo URL shown in catalog card
   createdAt: number;
   createdByUserId: string; // admin id
 };

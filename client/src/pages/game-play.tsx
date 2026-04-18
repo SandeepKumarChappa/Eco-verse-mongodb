@@ -10,7 +10,7 @@ import ClickCollect from "@/components/games/primitives/ClickCollect";
 import GridPicker from "@/components/games/primitives/GridPicker";
 import Stepper from "@/components/games/primitives/Stepper";
 import { useAuth } from "@/lib/auth";
-import { getGameById, getGameType } from "@/lib/gamesCatalog";
+import { GAMES, getGameById, mergeGamesCatalog } from "@/lib/gamesCatalog";
 
 function Confetti() {
   const ref = useRef<HTMLCanvasElement | null>(null);
@@ -1016,18 +1016,37 @@ function ExternalGameLoader({ gameId, gameUrl, onComplete, onNavigate, gameIcon 
 export default function GamePlayPage() {
   const [, params] = useRoute("/games/play/:id");
   const gameId = params?.id || "";
-  const game = getGameById(gameId);
   const { username } = useAuth();
   const [, navigate] = useLocation();
   const [completed, setCompleted] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [catalog, setCatalog] = useState(() => GAMES);
+  const [catalogLoaded, setCatalogLoaded] = useState(false);
 
   useEffect(() => {
-    if (!game) {
+    let active = true;
+    (async () => {
+      try {
+        const res = await fetch('/api/games');
+        const json = await res.json();
+        if (active) setCatalog(mergeGamesCatalog(Array.isArray(json) ? json : []));
+      } catch {
+        if (active) setCatalog(GAMES);
+      } finally {
+        if (active) setCatalogLoaded(true);
+      }
+    })();
+    return () => { active = false; };
+  }, []);
+
+  const game = getGameById(gameId, catalog.filter((item) => !GAMES.some((builtin) => builtin.id === item.id)));
+
+  useEffect(() => {
+    if (catalogLoaded && !game) {
       // unknown id -> back to catalog
       navigate('/games');
     }
-  }, [game, navigate]);
+  }, [catalogLoaded, game, navigate]);
 
   const onCompleted = async () => {
     if (!game || completed || submitting) return;
@@ -1048,11 +1067,15 @@ export default function GamePlayPage() {
   };
 
   const body = useMemo(() => {
+    if (!catalogLoaded) {
+      return <div className="text-sm text-earth-muted">Loading game...</div>;
+    }
+
     if (!game) {
       return <div className="text-sm text-earth-muted">This game is coming soon.</div>;
     }
 
-    if (getGameType(game.id) === 'external' && game.externalUrl) {
+    if (game.externalUrl) {
       return (
         <div className="w-full h-full flex flex-col items-center justify-center gap-4">
           <ExternalGameLoader 
@@ -1070,37 +1093,37 @@ export default function GamePlayPage() {
     }
 
     return <div className="text-sm text-earth-muted">This game is coming soon.</div>;
-  }, [game, onCompleted, navigate]);
+  }, [catalogLoaded, game, onCompleted, navigate]);
 
   return (
-    <div 
-      className="relative min-h-screen w-screen text-white overflow-x-hidden overflow-y-auto"
-      style={{
-        backgroundImage: 'url(/api/image/background-pictures-nature-hd-images-1920x1200-wallpaper-preview.jpg)',
-        backgroundSize: 'cover',
-        backgroundPosition: 'center',
-        backgroundRepeat: 'no-repeat'
-      }}
-    >
-      {/* Overlay for better visibility */}
-      <div className="absolute inset-0 bg-gradient-to-b from-black/70 via-black/65 to-black/75"></div>
+    <div className="relative min-h-screen w-screen text-white overflow-x-hidden overflow-y-auto bg-[#07111a]">
+      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_18%_14%,rgba(52,211,153,0.16),transparent_32%),radial-gradient(circle_at_82%_4%,rgba(103,232,249,0.16),transparent_28%),linear-gradient(180deg,#0c1a24_0%,#08131d_48%,#070f18_100%)]"></div>
+      <div className="pointer-events-none absolute left-[-9rem] top-10 h-72 w-72 rounded-full bg-emerald-300/15 blur-3xl"></div>
+      <div className="pointer-events-none absolute right-[-10rem] top-[-3rem] h-96 w-96 rounded-full bg-cyan-300/15 blur-3xl"></div>
+      <div className="pointer-events-none absolute bottom-[-8rem] left-1/3 h-80 w-80 rounded-full bg-sky-300/10 blur-3xl"></div>
       <Particles />
       <ParallaxBlobs />
-      
-      {/* Title */}
-      <div className="relative z-10 pt-16 pb-6 text-center">
-        <div className="bg-[#071a27]/76 backdrop-blur-xl border border-cyan-100/25 shadow-xl rounded-xl p-6 max-w-2xl mx-auto">
-          <div className="text-sm text-white/85">Eco-Game</div>
-          <h1 className="text-3xl font-semibold mt-1 text-white">{game?.icon || '🎮'} {game?.name || 'Play'}</h1>
-          <div className="text-xs text-white/80 mt-1">Reward: +{game?.points ?? 0} pts · Difficulty: {game?.difficulty}</div>
-        </div>
-      </div>
 
-      {/* Play surface */}
-      <div className="relative z-10 mx-auto max-w-5xl w-full pb-10">
-        <div className="mx-4 mb-8 rounded-2xl border border-cyan-100/20 bg-[#071a27]/72 backdrop-blur-xl p-4 sm:p-6 shadow-xl">
+      <div className="relative z-10 mx-auto w-full max-w-6xl px-3 sm:px-5 pt-16 pb-10">
+        <motion.div
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.35 }}
+          className="mb-4 flex flex-wrap items-center justify-center gap-2"
+        >
+          <span className="rounded-full border border-emerald-300/30 bg-emerald-300/10 px-3 py-1 text-[11px] uppercase tracking-[0.12em] text-emerald-100/90">Interactive Mission</span>
+          {game?.difficulty && <span className="rounded-full border border-white/20 bg-white/5 px-3 py-1 text-[11px] text-white/80">Difficulty: {game.difficulty}</span>}
+          {game?.points != null && <span className="rounded-full border border-cyan-300/30 bg-cyan-300/10 px-3 py-1 text-[11px] text-cyan-100/95">Reward: +{game.points} pts</span>}
+        </motion.div>
+
+        <motion.div
+          initial={{ opacity: 0, y: 14 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.45, ease: 'easeOut' }}
+          className="rounded-3xl border border-white/15 bg-[#0b1e2b]/72 p-4 sm:p-6 shadow-[0_24px_70px_rgba(0,0,0,0.5)] backdrop-blur-2xl"
+        >
           {body}
-        </div>
+        </motion.div>
       </div>
 
       {/* Completion ribbon */}

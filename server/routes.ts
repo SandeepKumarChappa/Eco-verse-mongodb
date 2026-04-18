@@ -684,6 +684,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const list = await (storage as any).listAdminAnnouncements(current);
     res.json(list);
   });
+  app.put('/api/admin/announcements/:id', async (req, res) => {
+    const current = (req.headers['x-username'] as string) || '';
+    const { title, body } = req.body ?? {};
+    const r = await (storage as any).updateAdminAnnouncement(current, req.params.id, { title, body });
+    if (!r.ok) return res.status(400).json({ error: r.error });
+    res.json(r.announcement);
+  });
+  app.delete('/api/admin/announcements/:id', async (req, res) => {
+    const current = (req.headers['x-username'] as string) || '';
+    const r = await (storage as any).deleteAdminAnnouncement(current, req.params.id);
+    if (!r.ok) return res.status(400).json({ error: r.error });
+    res.json({ ok: true });
+  });
 
   // ===== Student: Announcements (global + school) =====
   app.get('/api/student/announcements', async (req, res) => {
@@ -718,6 +731,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const current = (req.headers['x-username'] as string) || '';
     const list = await (storage as any).listAdminAssignments(current);
     res.json(list);
+  });
+  app.put('/api/admin/assignments/:id', async (req, res) => {
+    const current = (req.headers['x-username'] as string) || '';
+    const { title, description, deadline, maxPoints } = req.body ?? {};
+    const r = await (storage as any).updateAdminAssignment(current, req.params.id, { title, description, deadline, maxPoints });
+    if (!r.ok) return res.status(400).json({ error: r.error });
+    res.json(r.assignment);
+  });
+  app.delete('/api/admin/assignments/:id', async (req, res) => {
+    const current = (req.headers['x-username'] as string) || '';
+    const r = await (storage as any).deleteAdminAssignment(current, req.params.id);
+    if (!r.ok) return res.status(400).json({ error: r.error });
+    res.json({ ok: true });
   });
 
   // ===== Student: Assignments & Submissions =====
@@ -930,6 +956,38 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json(r);
   });
 
+  app.get('/api/learning/modules', async (_req, res) => {
+    const list = await (storage as any).listLearningModules();
+    res.json(list);
+  });
+
+  app.get('/api/admin/learning/modules', async (req, res) => {
+    const current = (req.headers['x-username'] as string) || '';
+    const list = await (storage as any).listManagedLearningModules(current);
+    res.json(list);
+  });
+
+  app.post('/api/admin/learning/modules', async (req, res) => {
+    const current = (req.headers['x-username'] as string) || '';
+    const r = await (storage as any).upsertManagedLearningModule(current, req.body ?? {});
+    if (!r.ok) return res.status(400).json({ error: r.error });
+    res.json(r.module);
+  });
+
+  app.put('/api/admin/learning/modules/:id', async (req, res) => {
+    const current = (req.headers['x-username'] as string) || '';
+    const r = await (storage as any).upsertManagedLearningModule(current, { ...(req.body ?? {}), id: req.params.id });
+    if (!r.ok) return res.status(400).json({ error: r.error });
+    res.json(r.module);
+  });
+
+  app.delete('/api/admin/learning/modules/:id', async (req, res) => {
+    const current = (req.headers['x-username'] as string) || '';
+    const r = await (storage as any).deleteManagedLearningModule(current, req.params.id);
+    if (!r.ok) return res.status(400).json({ error: r.error });
+    res.json({ ok: true });
+  });
+
   // ===== Activity logging =====
   app.post('/api/student/quiz-attempts', async (req, res) => {
     const current = (req.headers['x-username'] as string) || '';
@@ -968,8 +1026,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
   app.post('/api/admin/games', async (req, res) => {
     const current = (req.headers['x-username'] as string) || '';
-    const { id, name, category, description, difficulty, points, icon } = req.body ?? {};
-    const r = await (storage as any).createAdminGame(current, { id, name, category, description, difficulty, points, icon });
+    const { id, name, category, description, difficulty, points, icon, externalUrl, image } = req.body ?? {};
+    const r = await (storage as any).createAdminGame(current, { id, name, category, description, difficulty, points, icon, externalUrl, image });
     if (!r.ok) return res.status(400).json({ error: r.error });
     res.json(r.game);
   });

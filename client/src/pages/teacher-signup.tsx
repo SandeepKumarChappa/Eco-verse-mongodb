@@ -28,6 +28,7 @@ function PhotoInput({ label, value, onChange }: { label: string; value: string; 
 
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
+import SignupAnimatedBackground from "@/components/SignupAnimatedBackground";
 import { useAuth } from "@/lib/auth";
 import { useLocation } from "wouter";
 import { useToast } from "@/hooks/use-toast";
@@ -53,6 +54,19 @@ export default function TeacherSignupWizard() {
   const [otpSent, setOtpSent] = useState(false);
   const [otpCode, setOtpCode] = useState("");
   const [otpStatus, setOtpStatus] = useState<'valid' | 'invalid' | 'pending'>('pending');
+  const completionChecks = [
+    form.name.trim(),
+    form.email.trim(),
+    form.id.trim(),
+    form.username.trim() && usernameStatus === 'available',
+    form.schoolId.trim(),
+    form.subject.trim(),
+    form.password && form.password.length >= 6,
+    form.confirmPassword === form.password && form.confirmPassword.length > 0,
+    otpCode.replace(/\D/g, '').length === 6 && otpStatus === 'valid',
+  ];
+  const completedFields = completionChecks.filter(Boolean).length;
+  const completionPercent = Math.round((completedFields / completionChecks.length) * 100);
   
   // Validate OTP in real-time when 6 digits are entered
   useEffect(() => {
@@ -189,16 +203,7 @@ export default function TeacherSignupWizard() {
   };
 
   return (
-    <div
-      className="min-h-screen flex items-center justify-center p-6 relative"
-      style={{
-        backgroundImage: `url('https://images.unsplash.com/photo-1506905925346-21bda4d32df4?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NTY2NjZ8MHwxfHNlYXJjaHwyfHxuYXR1cmUlMjBtb3VudGFpbnxlbnwwfHx8fDE3NjA1MDgyNTZ8MA&ixlib=rb-4.1.0&q=85')`,
-        backgroundSize: "cover",
-        backgroundPosition: "center",
-      }}
-    >
-      {/* Overlay */}
-      <div className="absolute inset-0 bg-gradient-to-br from-blue-900/70 via-green-900/60 to-emerald-900/70"></div>
+    <SignupAnimatedBackground>
 
       <div className="relative z-10 w-full max-w-4xl">
         {/* Floating decorative elements */}
@@ -206,7 +211,7 @@ export default function TeacherSignupWizard() {
         <div className="absolute -bottom-10 -right-10 w-32 h-32 bg-green-400 rounded-full blur-3xl opacity-40 animate-pulse" style={{animationDelay: '1s'}}></div>
         <div className="absolute top-1/2 -right-20 w-20 h-20 bg-yellow-300 rounded-full blur-2xl opacity-30 animate-pulse" style={{animationDelay: '2s'}}></div>
 
-        <div className="bg-white/95 backdrop-blur-lg rounded-3xl shadow-2xl p-8 border-4 border-white/20 transform hover:scale-[1.01] transition-all duration-300">
+        <div className="bg-white/95 backdrop-blur-lg rounded-3xl shadow-2xl p-8 border border-white/30 transform hover:scale-[1.005] transition-all duration-500">
           {/* Header */}
           <div className="text-center mb-8">
             <div className="inline-block bg-gradient-to-r from-blue-400 to-emerald-500 p-4 rounded-full mb-4 shadow-lg">
@@ -216,6 +221,18 @@ export default function TeacherSignupWizard() {
             </div>
             <h1 className="text-4xl font-bold bg-gradient-to-r from-blue-600 to-green-600 bg-clip-text text-transparent mb-2">Join EcoVerse as a Teacher</h1>
             <p className="text-gray-700 text-lg">Shape the future of environmental education</p>
+            <div className="mt-5 max-w-md mx-auto">
+              <div className="flex items-center justify-between text-xs font-semibold text-gray-600 mb-2">
+                <span>Application Progress</span>
+                <span>{completionPercent}%</span>
+              </div>
+              <div className="h-2.5 w-full rounded-full bg-gray-200 overflow-hidden">
+                <div
+                  className="h-full rounded-full bg-gradient-to-r from-emerald-500 via-blue-500 to-cyan-500 transition-all duration-500"
+                  style={{ width: `${completionPercent}%` }}
+                ></div>
+              </div>
+            </div>
           </div>
 
           {/* Back Button */}
@@ -234,7 +251,7 @@ export default function TeacherSignupWizard() {
           {/* Form Sections */}
           <div className="space-y-6">
             {/* Basic Information */}
-            <div className="bg-gray-50 rounded-2xl p-6 border-2 border-gray-200">
+            <div className="bg-gray-50 rounded-2xl p-6 border-2 border-gray-200 transition-all duration-300 hover:border-blue-300 hover:shadow-lg">
               <h2 className="text-2xl font-bold text-gray-800 mb-4 flex items-center gap-3">
                 <div className="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center">
                   <span className="text-white font-bold text-sm">1</span>
@@ -280,7 +297,7 @@ export default function TeacherSignupWizard() {
             </div>
 
             {/* Account Setup */}
-            <div className="bg-gray-50 rounded-2xl p-6 border-2 border-gray-200">
+            <div className="bg-gray-50 rounded-2xl p-6 border-2 border-gray-200 transition-all duration-300 hover:border-purple-300 hover:shadow-lg">
               <h2 className="text-2xl font-bold text-gray-800 mb-4 flex items-center gap-3">
                 <div className="w-8 h-8 bg-purple-500 rounded-full flex items-center justify-center">
                   <span className="text-white font-bold text-sm">2</span>
@@ -353,7 +370,7 @@ export default function TeacherSignupWizard() {
             </div>
 
             {/* Professional Information */}
-            <div className="bg-gray-50 rounded-2xl p-6 border-2 border-gray-200">
+            <div className="bg-gray-50 rounded-2xl p-6 border-2 border-gray-200 transition-all duration-300 hover:border-green-300 hover:shadow-lg">
               <h2 className="text-2xl font-bold text-gray-800 mb-4 flex items-center gap-3">
                 <div className="w-8 h-8 bg-green-500 rounded-full flex items-center justify-center">
                   <span className="text-white font-bold text-sm">3</span>
@@ -387,7 +404,7 @@ export default function TeacherSignupWizard() {
             </div>
 
             {/* Profile Photo */}
-            <div className="bg-gray-50 rounded-2xl p-6 border-2 border-gray-200">
+            <div className="bg-gray-50 rounded-2xl p-6 border-2 border-gray-200 transition-all duration-300 hover:border-orange-300 hover:shadow-lg">
               <h2 className="text-2xl font-bold text-gray-800 mb-4 flex items-center gap-3">
                 <div className="w-8 h-8 bg-orange-500 rounded-full flex items-center justify-center">
                   <span className="text-white font-bold text-sm">4</span>
@@ -417,7 +434,7 @@ export default function TeacherSignupWizard() {
             </div>
 
             {/* Email Verification */}
-            <div className="bg-gray-50 rounded-2xl p-6 border-2 border-gray-200">
+            <div className="bg-gray-50 rounded-2xl p-6 border-2 border-gray-200 transition-all duration-300 hover:border-red-300 hover:shadow-lg">
               <h2 className="text-2xl font-bold text-gray-800 mb-4 flex items-center gap-3">
                 <div className="w-8 h-8 bg-red-500 rounded-full flex items-center justify-center">
                   <span className="text-white font-bold text-sm">5</span>
@@ -471,7 +488,7 @@ export default function TeacherSignupWizard() {
             <div className="bg-gradient-to-r from-blue-500 to-emerald-600 rounded-2xl p-6 text-white">
               <Button
                 onClick={submit}
-                disabled={submitting}
+                disabled={submitting || !isFormComplete()}
                 className="w-full py-4 bg-white text-blue-600 hover:bg-gray-50 font-bold rounded-xl shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed text-lg"
               >
                 {submitting ? (
@@ -489,10 +506,15 @@ export default function TeacherSignupWizard() {
               <p className="mt-4 text-center text-blue-100 text-sm">
                 After submission, your application will be pending until an admin approves it.
               </p>
+              {!isFormComplete() && (
+                <p className="mt-2 text-center text-blue-100/90 text-xs">
+                  Complete all fields and verify OTP to enable submission.
+                </p>
+              )}
             </div>
           </div>
         </div>
       </div>
-    </div>
+    </SignupAnimatedBackground>
   );
 }

@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useAuth } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
+import SignupAnimatedBackground from "@/components/SignupAnimatedBackground";
 import { Play, Clock, Eye, ThumbsUp, BookOpen, Star, Award, Zap, TrendingUp } from "lucide-react";
 
 // Fallback images for different environmental topics
@@ -447,15 +448,7 @@ export default function VideosPage() {
   };
 
   return (
-    <div 
-      className="min-h-screen text-white p-6 relative"
-      style={{
-        backgroundImage: 'url(/api/image/nature-319.jpg)',
-        backgroundSize: 'cover',
-        backgroundPosition: 'center',
-        backgroundRepeat: 'no-repeat'
-      }}
-    >
+    <SignupAnimatedBackground elementCount={20} className="text-white">
       {/* Add custom CSS animations */}
       <style dangerouslySetInnerHTML={{
         __html: `
@@ -501,9 +494,6 @@ export default function VideosPage() {
           }
         `
       }} />
-      
-      {/* Overlay for better text visibility */}
-      <div className="absolute inset-0 bg-black/50"></div>
       
       {/* Content */}
       <div className="relative z-10 max-w-7xl mx-auto">
@@ -754,6 +744,6 @@ export default function VideosPage() {
         </>
         )}
       </div>
-    </div>
+    </SignupAnimatedBackground>
   );
 }

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useAuth } from '@/lib/auth';
 import { Button } from '@/components/ui/button';
+import SignupAnimatedBackground from '@/components/SignupAnimatedBackground';
 
 export default function QuizzesPage() {
   const { username, role } = useAuth();
@@ -100,17 +101,7 @@ export default function QuizzesPage() {
   };
 
   return (
-    <div 
-      className="min-h-screen text-white p-6 relative overflow-hidden"
-      style={{
-        backgroundImage: 'url(/api/image/pngtree-abstract-cloudy-background-beautiful-natural-streaks-of-sky-and-clouds-red-image_15684333.jpg)',
-        backgroundSize: 'cover',
-        backgroundPosition: 'center',
-        backgroundRepeat: 'no-repeat'
-      }}
-    >
-      {/* Animated gradient overlay */}
-      <div className="absolute inset-0 bg-gradient-to-br from-black/40 via-black/50 to-black/60"></div>
+    <SignupAnimatedBackground elementCount={20} className="text-white">
       
       {/* Decorative elements */}
       <div className="absolute top-20 left-10 w-32 h-32 bg-blue-500/10 rounded-full blur-3xl animate-pulse"></div>
@@ -153,11 +144,12 @@ export default function QuizzesPage() {
             results={resultDetails}
               reviewOpen={reviewOpen}
               onToggleReview={()=> setReviewOpen(v=>!v)}
+              onJump={(questionIndex)=> setIdx(questionIndex)}
           />
         </Section>
       )}
       </div>
-    </div>
+    </SignupAnimatedBackground>
   );
 }
 
@@ -231,12 +223,14 @@ function QuizGrid({ list, onStart }: { list: any[]; onStart: (q:any)=>void }) {
 }
 
 function QuizRunner({ quiz, idx, answers, onSelect, onNext, onPrev, onExit, onSubmit, score, locked, results, reviewOpen, onToggleReview }: {
-  quiz: any; idx: number; answers: number[]; onSelect: (choice:number)=>void; onNext: ()=>void; onPrev: ()=>void; onExit: ()=>void; onSubmit: ()=>void; score: number | null; locked: boolean; results: Array<{ index:number; correctIndex:number; selected:number; isCorrect:boolean }> | null; reviewOpen: boolean; onToggleReview: ()=>void;
+  quiz: any; idx: number; answers: number[]; onSelect: (choice:number)=>void; onNext: ()=>void; onPrev: ()=>void; onExit: ()=>void; onSubmit: ()=>void; score: number | null; locked: boolean; results: Array<{ index:number; correctIndex:number; selected:number; isCorrect:boolean }> | null; reviewOpen: boolean; onToggleReview: ()=>void; onJump: (questionIndex:number)=>void;
 }) {
   const total = Array.isArray(quiz?.questions) ? quiz.questions.length : 0;
   const safeIdx = Math.max(0, Math.min(idx, Math.max(0, total - 1)));
   const q = total > 0 ? quiz.questions[safeIdx] : undefined;
   const progressPercent = (safeIdx + 1) / total * 100;
+  const answeredCount = answers.filter(a => a >= 0).length;
+  const currentResult = results?.find(r => r.index === safeIdx);
   
   return (
     <div className="relative">
@@ -262,150 +256,172 @@ function QuizRunner({ quiz, idx, answers, onSelect, onNext, onPrev, onExit, onSu
         </button>
       </div>
       
-      <div className="p-6 rounded-2xl border border-white/20 bg-gradient-to-br from-white/10 to-white/5 backdrop-blur-2xl shadow-2xl transition-all duration-300">
-        {!q ? (
-          <div className="text-sm text-red-300 bg-red-500/10 p-4 rounded-lg border border-red-400/30">No questions available.</div>
-        ) : (
-        <>
-        <div className="text-2xl font-bold mb-6 animate-fade-in text-white/95">{q.text}</div>
-        
-        <div className="grid gap-3 mb-6">
-          {q.options.map((opt: string, i: number) => {
-            const selected = answers[safeIdx] === i;
-            const rd = results?.find(r => r.index === safeIdx);
-            const isAnswer = !!rd && i === rd.correctIndex;
-            const isWrongSelected = !!rd && rd.selected === i && !rd.isCorrect;
-            const normalSelected = selected && !locked;
-            
-            return (
-              <button 
-                key={i} 
-                disabled={locked} 
-                onClick={()=>onSelect(i)} 
-                className={`text-left rounded-xl px-6 py-4 border-2 transition-all duration-300 group relative overflow-hidden ${
-                  normalSelected 
-                    ? 'bg-emerald-600/40 border-emerald-400 shadow-lg shadow-emerald-500/20 scale-105' 
-                    : 'border-white/30 hover:border-white/50 hover:bg-white/15'
-                } ${
-                  (locked && reviewOpen && isAnswer) 
-                    ? 'bg-emerald-600/30 border-emerald-400 shadow-lg shadow-emerald-500/20' 
-                    : ''
-                } ${
-                  (locked && reviewOpen && isWrongSelected) 
-                    ? 'bg-red-600/20 border-red-400 shadow-lg shadow-red-500/20' 
-                    : ''
-                } text-white/95 hover:text-white disabled:cursor-default`}
-              >
-                <div className="absolute inset-0 bg-gradient-to-r from-white/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
-                <div className="flex items-center gap-4 relative z-10">
-                  <span className={`h-8 w-8 rounded-full grid place-items-center text-sm font-bold flex-shrink-0 transition-all duration-300 ${
-                    normalSelected 
-                      ? 'bg-emerald-400 text-black scale-110' 
-                      : (locked && reviewOpen && isAnswer) 
-                        ? 'bg-emerald-400 text-black' 
-                        : (locked && reviewOpen && isWrongSelected) 
-                          ? 'bg-red-400 text-black' 
-                          : 'bg-white/20 text-white group-hover:bg-white/30'
-                  }`}>
-                    {i+1}
-                  </span>
-                  <span className="text-lg">{opt}</span>
-                </div>
-              </button>
-            );
-          })}
-        </div>
-        
-        <div className="flex items-center justify-between gap-4 mb-6">
-          <Button 
-            variant="secondary" 
-            onClick={onPrev} 
-            disabled={safeIdx===0}
-            className="bg-white/20 hover:bg-white/30 text-white border-white/30 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-all"
-          >
-            ← Prev
-          </Button>
-          
-          {locked ? (
-            <Button 
-              className="bg-blue-500/80 hover:bg-blue-600/80 text-white border border-blue-400/50 rounded-lg transition-all" 
-              onClick={onNext} 
-              disabled={safeIdx >= total - 1}
-            >
-              Next →
-            </Button>
+      <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_320px] gap-6 items-start">
+        <div className="p-6 rounded-2xl border border-white/20 bg-gradient-to-br from-white/10 to-white/5 backdrop-blur-2xl shadow-2xl transition-all duration-300 max-h-[72vh] overflow-y-auto pr-3">
+          {!q ? (
+            <div className="text-sm text-red-300 bg-red-500/10 p-4 rounded-lg border border-red-400/30">No questions available.</div>
           ) : (
-            safeIdx < total - 1 ? (
+          <>
+          <div className="text-2xl font-bold mb-6 animate-fade-in text-white/95">{q.text}</div>
+          
+          <div className="grid gap-3 mb-6">
+            {q.options.map((opt: string, i: number) => {
+              const selected = answers[safeIdx] === i;
+              const isAnswer = !!currentResult && i === currentResult.correctIndex;
+              const isWrongSelected = !!currentResult && currentResult.selected === i && !currentResult.isCorrect;
+              const normalSelected = selected && !locked;
+              
+              return (
+                <button 
+                  key={i} 
+                  disabled={locked} 
+                  onClick={()=>onSelect(i)} 
+                  className={`text-left rounded-xl px-6 py-4 border-2 transition-all duration-300 group relative overflow-hidden ${
+                    normalSelected 
+                      ? 'bg-emerald-600/40 border-emerald-400 shadow-lg shadow-emerald-500/20 scale-[1.01]' 
+                      : 'border-white/30 hover:border-white/50 hover:bg-white/15'
+                  } ${
+                    (locked && reviewOpen && isAnswer) 
+                      ? 'bg-emerald-600/30 border-emerald-400 shadow-lg shadow-emerald-500/20' 
+                      : ''
+                  } ${
+                    (locked && reviewOpen && isWrongSelected) 
+                      ? 'bg-red-600/20 border-red-400 shadow-lg shadow-red-500/20' 
+                      : ''
+                  } text-white/95 hover:text-white disabled:cursor-default`}
+                >
+                  <div className="absolute inset-0 bg-gradient-to-r from-white/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+                  <div className="flex items-center gap-4 relative z-10">
+                    <span className={`h-8 w-8 rounded-full grid place-items-center text-sm font-bold flex-shrink-0 transition-all duration-300 ${
+                      normalSelected 
+                        ? 'bg-emerald-400 text-black scale-110' 
+                        : (locked && reviewOpen && isAnswer) 
+                          ? 'bg-emerald-400 text-black' 
+                          : (locked && reviewOpen && isWrongSelected) 
+                            ? 'bg-red-400 text-black' 
+                            : 'bg-white/20 text-white group-hover:bg-white/30'
+                    }`}>
+                      {i+1}
+                    </span>
+                    <span className="text-lg">{opt}</span>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+          
+          <div className="flex items-center justify-between gap-4">
+            <Button 
+              variant="secondary" 
+              onClick={onPrev} 
+              disabled={safeIdx===0}
+              className="bg-white/20 hover:bg-white/30 text-white border-white/30 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+            >
+              ← Prev
+            </Button>
+            
+            {locked ? (
               <Button 
                 className="bg-blue-500/80 hover:bg-blue-600/80 text-white border border-blue-400/50 rounded-lg transition-all" 
-                onClick={onNext}
+                onClick={onNext} 
+                disabled={safeIdx >= total - 1}
               >
                 Next →
               </Button>
             ) : (
-              <Button 
-                className="bg-emerald-500/80 hover:bg-emerald-600/80 text-white border border-emerald-400/50 rounded-lg transition-all shadow-lg shadow-emerald-500/20" 
-                onClick={onSubmit}
-              >
-                🎯 Submit Quiz
-              </Button>
-            )
-          )}
-        </div>
-        
-        {score != null && (
-          <div className="mt-6 p-6 bg-gradient-to-r from-blue-500/10 to-emerald-500/10 border border-white/20 rounded-2xl animate-in fade-in slide-in-from-bottom-4 duration-500">
-            <div className="text-center mb-4">
-              <div className="text-sm text-white/60 mb-2">Your Score</div>
-              <div className="text-5xl font-bold text-white/95 mb-2">
-                {score}<span className="text-3xl">%</span>
-              </div>
-              <div className="h-1 w-32 mx-auto bg-white/20 rounded-full overflow-hidden">
-                <div 
-                  className="h-full bg-gradient-to-r from-emerald-500 to-cyan-500"
-                  style={{ width: `${score}%` }}
-                ></div>
-              </div>
-            </div>
-            
-            {locked && results && (
-              <Button 
-                variant="secondary" 
-                onClick={onToggleReview}
-                className="w-full bg-white/20 hover:bg-white/30 text-white border-white/30 rounded-lg transition-all"
-              >
-                {reviewOpen ? '👁️ Hide Review' : '👁️ Review Answers'}
-              </Button>
+              safeIdx < total - 1 ? (
+                <Button 
+                  className="bg-blue-500/80 hover:bg-blue-600/80 text-white border border-blue-400/50 rounded-lg transition-all" 
+                  onClick={onNext}
+                >
+                  Next →
+                </Button>
+              ) : (
+                <Button 
+                  className="bg-emerald-500/80 hover:bg-emerald-600/80 text-white border border-emerald-400/50 rounded-lg transition-all shadow-lg shadow-emerald-500/20" 
+                  onClick={onSubmit}
+                >
+                  🎯 Submit Quiz
+                </Button>
+              )
             )}
           </div>
-        )}
-        
-        {locked && reviewOpen && results && (
-          <div className="mt-6 p-6 bg-white/5 border border-white/20 rounded-2xl">
-            <h3 className="text-lg font-bold text-white/95 mb-4">Answer Review</h3>
-            <div className="space-y-2 max-h-64 overflow-y-auto">
-              {results.map((r) => {
-                const inRange = r.index >= 0 && r.index < total;
-                const options = inRange ? quiz.questions[r.index].options : [];
-                const answerText = (options && r.correctIndex >= 0 && r.correctIndex < options.length) ? options[r.correctIndex] : 'N/A';
-                return (
-                  <div 
-                    key={r.index}
-                    className={`p-3 rounded-lg border ${
-                      r.isCorrect 
-                        ? 'bg-emerald-500/10 border-emerald-400/50 text-emerald-200' 
-                        : 'bg-red-500/10 border-red-400/50 text-red-200'
-                    }`}
-                  >
-                    <span className="font-semibold">Q{r.index + 1}:</span> {r.isCorrect ? '✓ Correct' : `✗ Wrong (Answer: ${answerText})`}
-                  </div>
-                );
-              })}
-            </div>
+          </>
+          )}
+        </div>
+
+        <aside className="sticky top-4 rounded-2xl border border-white/20 bg-gradient-to-br from-white/10 to-white/5 backdrop-blur-2xl shadow-2xl p-4">
+          <h3 className="text-lg font-bold text-white/95 mb-3">Quiz Report</h3>
+          <div className="text-sm text-white/70 mb-2">Answered: {answeredCount}/{total}</div>
+          <div className="h-2 w-full bg-white/15 rounded-full overflow-hidden border border-white/20 mb-4">
+            <div className="h-full bg-gradient-to-r from-blue-500 to-cyan-500 transition-all duration-300" style={{ width: `${Math.round((answeredCount / Math.max(1,total)) * 100)}%` }}></div>
           </div>
-        )}
-        </>
-        )}
+
+          {score != null && (
+            <div className="mb-4 p-4 bg-gradient-to-r from-blue-500/10 to-emerald-500/10 border border-white/20 rounded-xl">
+              <div className="text-xs text-white/60 mb-1">Your Score</div>
+              <div className="text-3xl font-bold text-white/95">{score}%</div>
+              {locked && results && (
+                <Button
+                  variant="secondary"
+                  onClick={onToggleReview}
+                  className="w-full mt-3 bg-white/20 hover:bg-white/30 text-white border-white/30 rounded-lg transition-all"
+                >
+                  {reviewOpen ? '👁️ Hide Review' : '👁️ Review Answers'}
+                </Button>
+              )}
+            </div>
+          )}
+
+          <div className="mb-3 text-sm text-white/80 font-semibold">Question Navigator</div>
+          <div className="grid grid-cols-5 gap-2 max-h-56 overflow-y-auto pr-1">
+            {Array.from({ length: total }).map((_, i) => {
+              const answered = answers[i] >= 0;
+              const isCurrent = i === safeIdx;
+              const rd = results?.find(r => r.index === i);
+              const reviewCorrect = !!rd && rd.isCorrect;
+              const reviewWrong = !!rd && !rd.isCorrect;
+              return (
+                <button
+                  key={i}
+                  onClick={() => onJump(i)}
+                  className={`h-9 rounded-lg border text-sm font-semibold transition-all duration-200 ${
+                    isCurrent
+                      ? 'border-cyan-300 bg-cyan-500/30 text-white shadow-lg shadow-cyan-500/20'
+                      : reviewCorrect
+                        ? 'border-emerald-400/70 bg-emerald-500/20 text-emerald-100'
+                        : reviewWrong
+                          ? 'border-red-400/70 bg-red-500/20 text-red-100'
+                          : answered
+                            ? 'border-blue-300/60 bg-blue-500/20 text-blue-100 hover:bg-blue-500/30'
+                            : 'border-white/25 bg-white/10 text-white/80 hover:bg-white/20'
+                  }`}
+                  title={`Question ${i + 1}`}
+                >
+                  {i + 1}
+                </button>
+              );
+            })}
+          </div>
+
+          {locked && reviewOpen && results && (
+            <div className="mt-4 p-3 bg-white/5 border border-white/20 rounded-xl">
+              <h4 className="text-sm font-bold text-white/95 mb-2">Review Summary</h4>
+              <div className="space-y-2 max-h-40 overflow-y-auto pr-1">
+                {results.map((r) => {
+                  const inRange = r.index >= 0 && r.index < total;
+                  const options = inRange ? quiz.questions[r.index].options : [];
+                  const answerText = (options && r.correctIndex >= 0 && r.correctIndex < options.length) ? options[r.correctIndex] : 'N/A';
+                  return (
+                    <div key={r.index} className={`p-2 rounded-lg border text-xs ${r.isCorrect ? 'bg-emerald-500/10 border-emerald-400/50 text-emerald-200' : 'bg-red-500/10 border-red-400/50 text-red-200'}`}>
+                      <span className="font-semibold">Q{r.index + 1}:</span> {r.isCorrect ? '✓ Correct' : `✗ Correct: ${answerText}`}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+        </aside>
       </div>
       
       <style>{`

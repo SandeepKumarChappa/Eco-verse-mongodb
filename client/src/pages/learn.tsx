@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { Link, useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
-import { ArrowLeft, CheckCircle, BookOpen, Play, Sparkles, Trophy, Zap, Award, Flame, Target, Star, Type, Plus, Minus } from "lucide-react";
+import { ArrowLeft, CheckCircle, BookOpen, Play, Sparkles, Trophy, Zap, Award, Flame, Target, Star, Type, Plus, Minus, Edit3, Trash2, Save, X } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { motion, AnimatePresence } from "framer-motion";
 import { GAMES } from "@/lib/gamesCatalog";
@@ -2100,12 +2100,147 @@ const initialModules: Module[] = [
   ]
 }
 
-];  
+];
+
+type ManagedModuleApi = {
+  id: string;
+  title: string;
+  description?: string;
+  lessons?: Array<{
+    id?: string;
+    title?: string;
+    duration?: string;
+    points?: number;
+    content?: string;
+  }>;
+  deleted?: boolean;
+};
+
+const cloneQuiz = (quiz?: Quiz): Quiz | undefined => {
+  if (!quiz) return undefined;
+  return {
+    questions: quiz.questions.map((q) => ({
+      question: q.question,
+      options: [...q.options],
+      correct: q.correct,
+    })),
+  };
+};
+
+const cloneLesson = (lesson: Lesson): Lesson => ({
+  id: lesson.id,
+  title: lesson.title,
+  duration: lesson.duration,
+  points: lesson.points,
+  content: lesson.content,
+  quiz: cloneQuiz(lesson.quiz),
+  completed: !!lesson.completed,
+});
+
+const cloneModule = (module: Module): Module => ({
+  id: module.id,
+  title: module.title,
+  description: module.description,
+  progress: Number(module.progress || 0),
+  lessons: module.lessons.map(cloneLesson),
+});
+
+const normalizeManagedModule = (raw: ManagedModuleApi): Module | null => {
+  const id = String(raw?.id || '').trim();
+  const title = String(raw?.title || '').trim();
+  if (!id || !title) return null;
+  const lessons = Array.isArray(raw?.lessons)
+    ? raw.lessons
+        .map((lesson): Lesson | null => {
+          const lessonId = String(lesson?.id || '').trim();
+          const lessonTitle = String(lesson?.title || '').trim();
+          if (!lessonId || !lessonTitle) return null;
+          const points = Math.max(1, Math.floor(Number(lesson?.points) || 1));
+          return {
+            id: lessonId,
+            title: lessonTitle,
+            duration: String(lesson?.duration || '10 minutes').trim() || '10 minutes',
+            points,
+            content: String(lesson?.content || `<h2>${lessonTitle}</h2><p>Lesson content coming soon.</p>`),
+            completed: false,
+          };
+        })
+        .filter((item): item is Lesson => !!item)
+    : [];
+  return {
+    id,
+    title,
+    description: String(raw?.description || '').trim(),
+    progress: 0,
+    lessons,
+  };
+};
+
+const mergeModulesCatalog = (managedRaw: ManagedModuleApi[]) => {
+  const merged = new Map<string, Module>();
+  initialModules.forEach((module) => merged.set(module.id, cloneModule(module)));
+
+  managedRaw.forEach((item) => {
+    const id = String(item?.id || '').trim();
+    if (!id) return;
+    if (item?.deleted) {
+      merged.delete(id);
+      return;
+    }
+    const normalized = normalizeManagedModule(item);
+    if (!normalized) return;
+    merged.set(normalized.id, cloneModule(normalized));
+  });
+
+  return Array.from(merged.values());
+};
+
+const applyCompletionState = (catalog: Module[], previous: Module[]) => {
+  const completedKeys = new Set<string>();
+  previous.forEach((module) => {
+    module.lessons.forEach((lesson) => {
+      if (lesson.completed) completedKeys.add(`${module.id}:${lesson.id}`);
+    });
+  });
+
+  return catalog.map((module) => {
+    const lessons = module.lessons.map((lesson) => ({
+      ...lesson,
+      completed: completedKeys.has(`${module.id}:${lesson.id}`),
+    }));
+    const completedCount = lessons.filter((lesson) => lesson.completed).length;
+    const progress = lessons.length ? Math.round((completedCount / lessons.length) * 100) : 0;
+    return { ...module, lessons, progress };
+  });
+};
+
+const escapeHtml = (value: string) =>
+  value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/\"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+
+const renderLessonHtml = (content?: string) => {
+  const raw = String(content || "").trim();
+  if (!raw) return "<p>Lesson content coming soon.</p>";
+  const hasHtmlTags = /<\/?[a-z][\s\S]*>/i.test(raw);
+  if (hasHtmlTags) return raw;
+  return raw
+    .split(/\r?\n+/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => `<p>${escapeHtml(line)}</p>`)
+    .join("");
+};
 
 export default function LearnPage() {
   const [location] = useLocation();
-  const { username } = useAuth();
-  const [modules, setModules] = useState<Module[]>(initialModules);
+  const { username, role } = useAuth();
+  const canManageLearn = role === 'admin' || role === 'teacher';
+  const [modules, setModules] = useState<Module[]>(() => mergeModulesCatalog([]));
+  const [managedModulesApi, setManagedModulesApi] = useState<ManagedModuleApi[]>([]);
   const [selectedModuleId, setSelectedModuleId] = useState<string | null>(null);
   const [selectedLessonId, setSelectedLessonId] = useState<string | null>(null);
   const [isQuiz, setIsQuiz] = useState(false);
@@ -2125,9 +2260,176 @@ export default function LearnPage() {
   
   // Font size control state
   const [fontSize, setFontSize] = useState(16); // Base font size in pixels
+  const [managerOpen, setManagerOpen] = useState(false);
+  const [editingModuleId, setEditingModuleId] = useState<string | null>(null);
+  const [savingModule, setSavingModule] = useState(false);
+  const [deletingModuleId, setDeletingModuleId] = useState<string | null>(null);
+  const [moduleDraft, setModuleDraft] = useState<Module>({
+    id: '',
+    title: '',
+    description: '',
+    progress: 0,
+    lessons: [
+      {
+        id: '1',
+        title: '',
+        duration: '10 minutes',
+        points: 10,
+        content: '',
+        completed: false,
+      },
+    ],
+  });
 
   const selectedModule = modules.find(m => m.id === selectedModuleId) || null;
   const selectedLesson = selectedModule?.lessons.find(l => l.id === selectedLessonId) || null;
+
+  const loadManagedModules = async () => {
+    try {
+      const response = await fetch('/api/learning/modules');
+      const json = await response.json();
+      const rows = Array.isArray(json) ? (json as ManagedModuleApi[]) : [];
+      setManagedModulesApi(rows);
+      setModules((prev) => applyCompletionState(mergeModulesCatalog(rows), prev));
+    } catch {
+      setManagedModulesApi([]);
+      setModules((prev) => applyCompletionState(mergeModulesCatalog([]), prev));
+    }
+  };
+
+  const resetModuleDraft = () => {
+    setEditingModuleId(null);
+    setModuleDraft({
+      id: '',
+      title: '',
+      description: '',
+      progress: 0,
+      lessons: [
+        {
+          id: '1',
+          title: '',
+          duration: '10 minutes',
+          points: 10,
+          content: '',
+          completed: false,
+        },
+      ],
+    });
+  };
+
+  const openCreateModule = () => {
+    resetModuleDraft();
+    setManagerOpen(true);
+  };
+
+  const openEditModule = (module: Module) => {
+    setEditingModuleId(module.id);
+    setModuleDraft(cloneModule(module));
+    setManagerOpen(true);
+  };
+
+  const addDraftLesson = () => {
+    setModuleDraft((prev) => ({
+      ...prev,
+      lessons: [
+        ...prev.lessons,
+        {
+          id: `${prev.lessons.length + 1}`,
+          title: '',
+          duration: '10 minutes',
+          points: 10,
+          content: '',
+          completed: false,
+        },
+      ],
+    }));
+  };
+
+  const removeDraftLesson = (index: number) => {
+    setModuleDraft((prev) => {
+      const next = prev.lessons.filter((_, i) => i !== index);
+      return { ...prev, lessons: next.length ? next : prev.lessons };
+    });
+  };
+
+  const saveModuleDraft = async () => {
+    if (!canManageLearn || !username) return;
+    const title = moduleDraft.title.trim();
+    if (!title) {
+      setMessage('Module title is required.');
+      return;
+    }
+    const validLessons = moduleDraft.lessons.filter((lesson) => lesson.title.trim());
+    if (validLessons.length === 0) {
+      setMessage('Add at least one lesson with a title.');
+      return;
+    }
+
+    const payload = {
+      id: editingModuleId || undefined,
+      title,
+      description: moduleDraft.description.trim(),
+      lessons: validLessons.map((lesson) => ({
+        id: (lesson.id || '').trim() || undefined,
+        title: lesson.title.trim(),
+        duration: lesson.duration.trim() || '10 minutes',
+        points: Math.max(1, Math.floor(Number(lesson.points) || 1)),
+        content: lesson.content || `<h2>${lesson.title.trim()}</h2><p>Lesson content coming soon.</p>`,
+      })),
+    };
+
+    setSavingModule(true);
+    try {
+      const res = await fetch(editingModuleId ? `/api/admin/learning/modules/${encodeURIComponent(editingModuleId)}` : '/api/admin/learning/modules', {
+        method: editingModuleId ? 'PUT' : 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Username': username,
+        },
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json().catch(() => ({} as any));
+      if (!res.ok) {
+        setMessage(data?.error || 'Failed to save module.');
+        return;
+      }
+      await loadManagedModules();
+      setMessage(editingModuleId ? 'Module updated successfully.' : 'Module created successfully.');
+      resetModuleDraft();
+      setManagerOpen(false);
+    } finally {
+      setSavingModule(false);
+      setTimeout(() => setMessage(null), 2200);
+    }
+  };
+
+  const deleteManagedModule = async (moduleId: string, moduleTitle: string) => {
+    if (!canManageLearn || !username) return;
+    if (!confirm(`Delete module "${moduleTitle}"?`)) return;
+
+    setDeletingModuleId(moduleId);
+    try {
+      const res = await fetch(`/api/admin/learning/modules/${encodeURIComponent(moduleId)}`, {
+        method: 'DELETE',
+        headers: { 'X-Username': username },
+      });
+      const data = await res.json().catch(() => ({} as any));
+      if (!res.ok) {
+        setMessage(data?.error || 'Failed to delete module.');
+        return;
+      }
+      await loadManagedModules();
+      if (selectedModuleId === moduleId) {
+        setSelectedModuleId(null);
+        setSelectedLessonId(null);
+        setIsQuiz(false);
+      }
+      setMessage('Module deleted successfully.');
+    } finally {
+      setDeletingModuleId(null);
+      setTimeout(() => setMessage(null), 2200);
+    }
+  };
 
   const getRelatedGames = (moduleId?: string | null, lessonId?: string | null) => {
     if (!moduleId) return [];
@@ -2212,6 +2514,10 @@ export default function LearnPage() {
   };
 
   useEffect(() => {
+    loadManagedModules();
+  }, []);
+
+  useEffect(() => {
     loadProgress();
   }, [username]);
 
@@ -2230,7 +2536,7 @@ export default function LearnPage() {
     const moduleId = params.get('module');
     if (!moduleId) return;
 
-    const targetModule = initialModules.find(module => module.id === moduleId);
+    const targetModule = modules.find(module => module.id === moduleId);
     if (!targetModule) return;
 
     setSelectedModuleId(targetModule.id);
@@ -2246,7 +2552,7 @@ export default function LearnPage() {
     );
 
     setSelectedLessonId(firstMatchingLesson || targetModule.lessons[0]?.id || null);
-  }, [location]);
+  }, [location, modules]);
 
   const playChime = () => {
     if (typeof window === 'undefined') return;
@@ -2442,6 +2748,12 @@ export default function LearnPage() {
     const bPriority = moduleOrderPriority[b.id] ?? 999;
     return aPriority - bPriority;
   });
+  const managedOverrideIds = new Set(
+    managedModulesApi
+      .filter((module) => !module.deleted)
+      .map((module) => String(module.id || '').trim())
+      .filter(Boolean)
+  );
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-950 via-emerald-950 to-slate-900 text-white relative overflow-hidden">
@@ -2466,6 +2778,16 @@ export default function LearnPage() {
                   Environmental Learning Hub
                 </h1>
                 <p className="text-white/70 mt-2">Short lessons, quick quizzes, real eco points.</p>
+                {canManageLearn && (
+                  <div className="mt-3">
+                    <Button
+                      onClick={() => setManagerOpen((prev) => !prev)}
+                      className="bg-white/10 border border-white/25 hover:bg-white/20 text-white"
+                    >
+                      {managerOpen ? 'Close Learn Manager' : 'Manage Modules & Lessons'}
+                    </Button>
+                  </div>
+                )}
               </div>
               <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
                 <div className="bg-white/10 border border-white/20 rounded-xl p-3">
@@ -2507,6 +2829,191 @@ export default function LearnPage() {
           >
             <Zap className="h-4 w-4" />
             Lesson completion recorded
+          </motion.div>
+        )}
+
+        {canManageLearn && managerOpen && (
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="mb-8 rounded-2xl border border-cyan-300/30 bg-cyan-500/10 p-5 md:p-6"
+          >
+            <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+              <div>
+                <h3 className="text-xl font-bold text-cyan-200">Learn Content Manager</h3>
+                <p className="text-sm text-white/70">Admins and teachers can add, edit, or delete modules and lessons.</p>
+              </div>
+              <Button onClick={openCreateModule} className="bg-cyan-300 text-slate-950 hover:bg-cyan-200 font-bold">
+                <Plus className="h-4 w-4 mr-2" /> New Module
+              </Button>
+            </div>
+
+            <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">
+              <div className="rounded-xl border border-white/20 bg-white/5 p-4 space-y-3 max-h-[34rem] overflow-y-auto">
+                {sortedModules.map((module) => {
+                  const isManagedOverride = managedOverrideIds.has(module.id);
+                  return (
+                    <div key={`manage-${module.id}`} className="rounded-lg border border-white/15 bg-black/20 p-3">
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <div className="font-semibold text-white">{module.title}</div>
+                          <div className="text-xs text-white/65 mt-0.5">{module.lessons.length} lessons</div>
+                          <div className="text-[11px] text-white/55 mt-1">{isManagedOverride ? 'Managed override' : 'Built-in module'}</div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            title="Edit module"
+                            aria-label="Edit module"
+                            onClick={() => openEditModule(module)}
+                            className="h-8 w-8 rounded-full border border-emerald-400/60 bg-emerald-500/20 text-emerald-300 flex items-center justify-center hover:bg-emerald-500/35"
+                          >
+                            <Edit3 className="h-3.5 w-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            title="Delete module"
+                            aria-label="Delete module"
+                            onClick={() => deleteManagedModule(module.id, module.title)}
+                            disabled={deletingModuleId === module.id}
+                            className="h-8 w-8 rounded-full border border-red-400/60 bg-red-500/20 text-red-300 flex items-center justify-center hover:bg-red-500/35 disabled:opacity-60"
+                          >
+                            <Trash2 className={`h-3.5 w-3.5 ${deletingModuleId === module.id ? 'animate-pulse' : ''}`} />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              <div className="rounded-xl border border-white/20 bg-white/5 p-4 space-y-4 max-h-[34rem] overflow-y-auto">
+                <div className="flex items-center justify-between gap-2">
+                  <h4 className="font-semibold text-white">{editingModuleId ? 'Edit Module' : 'Create Module'}</h4>
+                  <Button
+                    variant="ghost"
+                    onClick={resetModuleDraft}
+                    className="text-white/80 hover:text-white hover:bg-white/10"
+                  >
+                    <X className="h-4 w-4 mr-1" /> Reset
+                  </Button>
+                </div>
+
+                <div>
+                  <label className="text-xs text-white/70">Module Title</label>
+                  <input
+                    value={moduleDraft.title}
+                    onChange={(e) => setModuleDraft((prev) => ({ ...prev, title: e.target.value }))}
+                    className="mt-1 w-full rounded-lg border border-white/20 bg-black/25 px-3 py-2 text-white"
+                    placeholder="Module title"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-xs text-white/70">Description</label>
+                  <textarea
+                    value={moduleDraft.description}
+                    onChange={(e) => setModuleDraft((prev) => ({ ...prev, description: e.target.value }))}
+                    className="mt-1 w-full rounded-lg border border-white/20 bg-black/25 px-3 py-2 text-white"
+                    rows={2}
+                    placeholder="Short module description"
+                  />
+                </div>
+
+                <div className="flex items-center justify-between">
+                  <label className="text-xs text-white/70">Lessons</label>
+                  <Button onClick={addDraftLesson} variant="secondary" className="bg-white/15 hover:bg-white/25 text-white">
+                    <Plus className="h-4 w-4 mr-1" /> Add Lesson
+                  </Button>
+                </div>
+
+                <div className="space-y-3">
+                  {moduleDraft.lessons.map((lesson, index) => (
+                    <div key={`draft-lesson-${index}`} className="rounded-lg border border-white/15 bg-black/20 p-3 space-y-2">
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="text-xs text-white/70">Lesson {index + 1}</div>
+                        {moduleDraft.lessons.length > 1 && (
+                          <button
+                            type="button"
+                            onClick={() => removeDraftLesson(index)}
+                            className="text-red-300 hover:text-red-200"
+                            title="Remove lesson"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
+                        )}
+                      </div>
+                      <input
+                        value={lesson.title}
+                        onChange={(e) =>
+                          setModuleDraft((prev) => ({
+                            ...prev,
+                            lessons: prev.lessons.map((item, i) => i === index ? { ...item, title: e.target.value } : item),
+                          }))
+                        }
+                        className="w-full rounded-md border border-white/20 bg-black/20 px-2.5 py-2 text-sm text-white"
+                        placeholder="Lesson title"
+                      />
+                      <div className="grid grid-cols-2 gap-2">
+                        <input
+                          value={lesson.duration}
+                          onChange={(e) =>
+                            setModuleDraft((prev) => ({
+                              ...prev,
+                              lessons: prev.lessons.map((item, i) => i === index ? { ...item, duration: e.target.value } : item),
+                            }))
+                          }
+                          className="rounded-md border border-white/20 bg-black/20 px-2.5 py-2 text-sm text-white"
+                          placeholder="Duration (e.g. 12 minutes)"
+                        />
+                        <input
+                          type="number"
+                          min={1}
+                          max={500}
+                          value={lesson.points}
+                          onChange={(e) =>
+                            setModuleDraft((prev) => ({
+                              ...prev,
+                              lessons: prev.lessons.map((item, i) => i === index ? { ...item, points: Math.max(1, Math.min(500, Number(e.target.value) || 1)) } : item),
+                            }))
+                          }
+                          className="rounded-md border border-white/20 bg-black/20 px-2.5 py-2 text-sm text-white"
+                          placeholder="Points"
+                        />
+                      </div>
+                      <textarea
+                        value={lesson.content}
+                        onChange={(e) =>
+                          setModuleDraft((prev) => ({
+                            ...prev,
+                            lessons: prev.lessons.map((item, i) => i === index ? { ...item, content: e.target.value } : item),
+                          }))
+                        }
+                        className="w-full rounded-md border border-white/20 bg-black/20 px-2.5 py-2 text-sm text-white"
+                        rows={3}
+                        placeholder="Lesson content (HTML supported)"
+                      />
+                    </div>
+                  ))}
+                </div>
+
+                <div className="flex gap-2">
+                  <Button onClick={saveModuleDraft} disabled={savingModule} className="bg-gradient-to-r from-emerald-600 to-cyan-600 hover:from-emerald-700 hover:to-cyan-700 text-white">
+                    <Save className="h-4 w-4 mr-2" /> {savingModule ? 'Saving...' : (editingModuleId ? 'Update Module' : 'Create Module')}
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    onClick={() => {
+                      setManagerOpen(false);
+                      resetModuleDraft();
+                    }}
+                    className="bg-white/15 hover:bg-white/25 text-white"
+                  >
+                    Close
+                  </Button>
+                </div>
+              </div>
+            </div>
           </motion.div>
         )}
 
@@ -2672,8 +3179,8 @@ export default function LearnPage() {
                       <ArrowLeft className="h-4 w-4 mr-2" /> Back
                     </Button>
                     <div>
-                      <h2 className="text-3xl font-bold bg-gradient-to-r from-emerald-300 to-cyan-300 bg-clip-text text-transparent">{selectedModule.title}</h2>
-                      <p className="text-white/70 text-sm mt-1">{selectedModule.description}</p>
+                      <h2 className="text-3xl font-bold bg-gradient-to-r from-emerald-300 to-cyan-300 bg-clip-text text-transparent break-words [overflow-wrap:anywhere]">{selectedModule.title}</h2>
+                      <p className="text-white/70 text-sm mt-1 break-words [overflow-wrap:anywhere] whitespace-pre-wrap">{selectedModule.description}</p>
                     </div>
                   </div>
                   <Button 
@@ -2704,11 +3211,11 @@ export default function LearnPage() {
                         
                         <div className="relative z-10 flex items-start justify-between">
                           <div className="flex-1">
-                            <h3 className="text-white font-semibold mb-2 group-hover:text-emerald-200 transition-colors flex items-center gap-2">
-                              <span className="inline-block p-1.5 bg-emerald-500/20 rounded group-hover:bg-emerald-500/30 transition-all">
+                            <h3 className="text-white font-semibold mb-2 group-hover:text-emerald-200 transition-colors flex items-start gap-2 break-words [overflow-wrap:anywhere]">
+                              <span className="inline-block p-1.5 bg-emerald-500/20 rounded group-hover:bg-emerald-500/30 transition-all mt-0.5">
                                 <Play className="h-3 w-3 text-emerald-300" />
                               </span>
-                              {lesson.title}
+                              <span>{lesson.title}</span>
                             </h3>
                             <p className="text-white/60 text-xs flex items-center gap-2 group-hover:text-white/70 transition-colors">
                               <span className="flex items-center gap-1">
@@ -2895,7 +3402,7 @@ export default function LearnPage() {
                       <ArrowLeft className="h-4 w-4 mr-2" /> Back
                     </Button>
                     <div>
-                      <h2 className="text-3xl font-bold bg-gradient-to-r from-emerald-300 to-cyan-300 bg-clip-text text-transparent">{selectedLesson.title}</h2>
+                      <h2 className="text-3xl font-bold bg-gradient-to-r from-emerald-300 to-cyan-300 bg-clip-text text-transparent break-words [overflow-wrap:anywhere]">{selectedLesson.title}</h2>
                       <p className="text-white/70 text-sm mt-1 flex items-center gap-3">
                         <span className="flex items-center gap-1">⏱️ {selectedLesson.duration}</span>
                         <span className="flex items-center gap-1"><Star className="h-4 w-4 text-yellow-400" /> {selectedLesson.points} EcoPoints</span>
@@ -2958,9 +3465,9 @@ export default function LearnPage() {
                   </div>
                   
                   <div 
-                    className="prose prose-invert max-w-none prose-h2:font-bold prose-h2:text-emerald-300 prose-strong:text-emerald-300 prose-a:text-cyan-400 hover:prose-a:text-cyan-300" 
+                    className="prose prose-invert max-w-none break-words [overflow-wrap:anywhere] prose-h2:font-bold prose-h2:text-emerald-300 prose-strong:text-emerald-300 prose-a:text-cyan-400 hover:prose-a:text-cyan-300" 
                     style={{ fontSize: `${fontSize}px` }}
-                    dangerouslySetInnerHTML={{ __html: selectedLesson.content || "" }} 
+                    dangerouslySetInnerHTML={{ __html: renderLessonHtml(selectedLesson.content) }} 
                   />
                 </motion.div>
 

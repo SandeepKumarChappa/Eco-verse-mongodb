@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { useAuth } from "@/lib/auth";
 import { Link } from "wouter";
 import { motion } from "framer-motion";
-import { GAMES } from "@/lib/gamesCatalog";
+import { GAME_CATEGORIES, GAMES, mergeGamesCatalog } from "@/lib/gamesCatalog";
 
 type GameDef = typeof GAMES[number];
 
@@ -21,6 +21,7 @@ export default function GamesPage() {
   const [summary, setSummary] = useState<{ totalGamePoints: number; badges: string[]; monthCompletedCount: number; totalUniqueGames: number } | null>(null);
   const [loadingSummary, setLoadingSummary] = useState(false);
   const { username } = useAuth();
+  const [liveGames, setLiveGames] = useState<any[]>([]);
   const [cardsVisible, setCardsVisible] = useState(false);
   const [catalogLoading, setCatalogLoading] = useState(true);
   const [hoverFx, setHoverFx] = useState<Record<string, { x: number; y: number }>>({});
@@ -47,9 +48,24 @@ export default function GamesPage() {
     return () => { active = false; };
   }, [username]);
 
+  useEffect(() => {
+    let active = true;
+    (async () => {
+      try {
+        const res = await fetch('/api/games');
+        const json = await res.json();
+        if (active) setLiveGames(Array.isArray(json) ? json : []);
+      } catch {
+        if (active) setLiveGames([]);
+      }
+    })();
+    return () => { active = false; };
+  }, []);
+
   const filtered = useMemo(() => {
-    return category === 'all' ? GAMES : GAMES.filter(g => g.category === category);
-  }, [category]);
+    const merged = mergeGamesCatalog(liveGames);
+    return category === 'all' ? merged : merged.filter(g => g.category === category);
+  }, [category, liveGames]);
 
   useEffect(() => {
     // Gives a polished first-load skeleton before cards animate in.
@@ -217,11 +233,11 @@ export default function GamesPage() {
         <Tabs value={category} onValueChange={(v)=>setCategory(v as any)}>
           <TabsList className="h-auto flex-wrap justify-start gap-2 rounded-2xl border border-white/15 bg-[#f4efe80d]/80 p-2 backdrop-blur-md">
             <TabsTrigger value="all" className="rounded-full px-4 py-2 data-[state=active]:bg-white/20 data-[state=active]:text-white data-[state=active]:shadow-md">All</TabsTrigger>
-            <TabsTrigger value="recycling" className="rounded-full px-4 py-2 data-[state=active]:bg-white/20 data-[state=active]:text-white data-[state=active]:shadow-md">♻️ Recycling</TabsTrigger>
-            <TabsTrigger value="climate" className="rounded-full px-4 py-2 data-[state=active]:bg-white/20 data-[state=active]:text-white data-[state=active]:shadow-md">🌍 Climate</TabsTrigger>
-            <TabsTrigger value="habits" className="rounded-full px-4 py-2 data-[state=active]:bg-white/20 data-[state=active]:text-white data-[state=active]:shadow-md">🏡 Habits</TabsTrigger>
-            <TabsTrigger value="wildlife" className="rounded-full px-4 py-2 data-[state=active]:bg-white/20 data-[state=active]:text-white data-[state=active]:shadow-md">🌱 Plant & Wildlife</TabsTrigger>
-            <TabsTrigger value="fun" className="rounded-full px-4 py-2 data-[state=active]:bg-white/20 data-[state=active]:text-white data-[state=active]:shadow-md">🎲 Fun</TabsTrigger>
+            {GAME_CATEGORIES.map((item) => (
+              <TabsTrigger key={item.value} value={item.value} className="rounded-full px-4 py-2 data-[state=active]:bg-white/20 data-[state=active]:text-white data-[state=active]:shadow-md">
+                {item.label}
+              </TabsTrigger>
+            ))}
           </TabsList>
           <TabsContent value={category}>
             {/* Grid of game cards */}
@@ -245,6 +261,7 @@ export default function GamesPage() {
                 const imageShiftY = fx.y * 8;
                 const glowX = 50 + fx.x * 8;
                 const glowY = 50 + fx.y * 10;
+                const detailChips = ['About', 'How To Play', 'Real-Life Effects', 'Read + Action', 'Learn Path'];
 
                 return (
                 <motion.div
@@ -262,7 +279,7 @@ export default function GamesPage() {
                 >
                   <div className={`relative h-40 overflow-hidden bg-gradient-to-br ${CATEGORY_THEME[g.category]}`}>
                     <img
-                      src={g.image ?? "/api/image/stunning-high-resolution-nature-and-landscape-backgrounds-breathtaking-scenery-in-hd-photo.jpg"}
+                      src={g.image || "/api/image/stunning-high-resolution-nature-and-landscape-backgrounds-breathtaking-scenery-in-hd-photo.jpg"}
                       alt={`${g.name} preview`}
                       className="h-full w-full object-cover opacity-70 transition-transform duration-300"
                       style={{ transform: `scale(1.08) translate(${imageShiftX}px, ${imageShiftY}px)` }}
@@ -285,6 +302,14 @@ export default function GamesPage() {
                     <div className="mt-4 text-base flex items-center justify-between gap-3">
                       <div className="text-white/90">Reward: <span className="font-extrabold text-emerald-200">+{g.points} pts</span></div>
                       <span className="text-xs rounded-full border border-white/25 bg-white/5 px-2.5 py-1 uppercase tracking-wider text-white/65">{g.category}</span>
+                    </div>
+                    <div className="mt-3 flex flex-wrap gap-1.5">
+                      <span className="text-[11px] rounded-full border border-emerald-300/25 bg-emerald-300/10 px-2.5 py-1 text-emerald-100/90">Reward</span>
+                      {detailChips.map((chip) => (
+                        <span key={`${g.id}-${chip}`} className="text-[11px] rounded-full border border-white/20 bg-white/5 px-2.5 py-1 text-white/75">
+                          {chip}
+                        </span>
+                      ))}
                     </div>
                     <div className="mt-4 flex items-center justify-end">
                     <Link href={`/games/play/${g.id}`}>
