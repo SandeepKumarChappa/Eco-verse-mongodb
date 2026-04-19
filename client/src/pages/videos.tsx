@@ -129,6 +129,19 @@ interface Video {
   uploadDate?: string;
 }
 
+const formatDuration = (duration?: number | string | null): string => {
+  if (typeof duration === 'string' && duration.trim()) return duration.trim();
+  const totalSeconds = Number(duration);
+  if (!Number.isFinite(totalSeconds) || totalSeconds <= 0) return 'N/A';
+  const seconds = Math.floor(totalSeconds % 60);
+  const minutes = Math.floor((totalSeconds / 60) % 60);
+  const hours = Math.floor(totalSeconds / 3600);
+  if (hours > 0) {
+    return `${hours}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+  }
+  return `${minutes}:${String(seconds).padStart(2, '0')}`;
+};
+
 export default function VideosPage() {
   const { role, username } = useAuth();
   const [selectedCategory, setSelectedCategory] = useState<string>("All");
@@ -149,20 +162,36 @@ export default function VideosPage() {
         if (response.ok) {
           const data = await response.json();
           // Transform API data to match our Video interface
-          const transformedVideos = data.map((video: any) => {
+          const transformedVideos = await Promise.all(data.map(async (video: any) => {
             // Extract YouTube video ID
             const extractVideoId = (url: string) => {
               if (!url) return null;
               const match = url.match(/(?:youtu.be\/|youtube.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=))([\w-]{11})/);
               return match ? match[1] : null;
             };
+
+            // Backward compatibility: some older uploads stored no `url` due payload mismatch.
+            // Recover YouTube source from thumbnail URL when possible.
+            const extractVideoIdFromThumbnail = (thumb: string) => {
+              if (!thumb) return null;
+              const match = thumb.match(/img\.youtube\.com\/vi\/([\w-]{11})\//);
+              return match ? match[1] : null;
+            };
+
+            let sourceUrl = video.url || '';
+            if (!sourceUrl && video.type === 'youtube') {
+              const thumbId = extractVideoIdFromThumbnail(video.thumbnail || '');
+              if (thumbId) {
+                sourceUrl = `https://www.youtube.com/watch?v=${thumbId}`;
+              }
+            }
             
             // Generate thumbnail URL with robust fallback system
             let thumbnailUrl = video.thumbnail;
             
             // If no thumbnail exists, try to get YouTube thumbnail
-            if (!thumbnailUrl && video.url && video.url.includes('youtube')) {
-              const videoId = extractVideoId(video.url);
+            if (!thumbnailUrl && sourceUrl && sourceUrl.includes('youtube')) {
+              const videoId = extractVideoId(sourceUrl);
               if (videoId) {
                 // Try different YouTube thumbnail qualities
                 thumbnailUrl = `https://img.youtube.com/vi/${videoId}/maxresdefault.jpg`;
@@ -175,11 +204,28 @@ export default function VideosPage() {
             }
             
             // Generate embed URL
-            let embedUrl = video.url;
-            if (video.url && video.url.includes('youtube')) {
-              const videoId = extractVideoId(video.url);
+            let embedUrl = sourceUrl;
+            if (sourceUrl && sourceUrl.includes('youtube')) {
+              const videoId = extractVideoId(sourceUrl);
               if (videoId) {
                 embedUrl = `https://www.youtube.com/embed/${videoId}`;
+              }
+            }
+
+            let durationLabel = formatDuration(video.duration);
+            if (durationLabel === 'N/A' && sourceUrl && sourceUrl.includes('youtube')) {
+              try {
+                const metaRes = await fetch('/api/videos/youtube-metadata', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ url: sourceUrl })
+                });
+                if (metaRes.ok) {
+                  const meta = await metaRes.json();
+                  durationLabel = formatDuration(meta?.duration);
+                }
+              } catch {
+                // Keep fallback label when metadata request fails.
               }
             }
             
@@ -188,7 +234,7 @@ export default function VideosPage() {
               title: video.title,
               description: video.description,
               thumbnail: thumbnailUrl,
-              duration: video.duration || "N/A",
+              duration: durationLabel,
               category: video.category || "General",
               views: Math.floor(Math.random() * 20000) + 1000, // Mock data for views
               likes: Math.floor(Math.random() * 2000) + 100, // Mock data for likes  
@@ -204,7 +250,7 @@ export default function VideosPage() {
               uploadedBy: video.uploadedBy,
               uploadDate: new Date(video.uploadedAt).toLocaleDateString()
             };
-          });
+          }));
           setVideos(transformedVideos);
         }
       } catch (error) {
@@ -351,8 +397,8 @@ export default function VideosPage() {
           const response = await fetch(`/api/users/${username}/credits`);
           if (response.ok) {
             const data = await response.json();
-            setUserCredits(data.credits || 0);
-            setWatchedVideos(new Set(data.watchedVideos || []));
+            setUserCredits(Number(data.totalCredits ?? data.credits ?? 0));
+            setWatchedVideos(new Set(Array.isArray(data.watchedVideos) ? data.watchedVideos : []));
           }
         } catch (error) {
           console.error('Failed to load user data:', error);
@@ -373,15 +419,22 @@ export default function VideosPage() {
           'X-Username': username
         },
         body: JSON.stringify({
+          username,
           videoId: video.id,
           credits: video.credits
         })
       });
 
       if (response.ok) {
-        setUserCredits(prev => prev + video.credits);
-        setWatchedVideos(prev => new Set([...prev, video.id]));
-        setShowCreditsAnimation(video.id);
+        const result = await response.json().catch(() => ({} as any));
+        if (result?.success) {
+          const awarded = Number(result?.creditsAwarded ?? 0);
+          if (awarded > 0) {
+            setUserCredits(prev => prev + awarded);
+            setWatchedVideos(prev => new Set([...prev, video.id]));
+            setShowCreditsAnimation(video.id);
+          }
+        }
         
         // Hide animation after 3 seconds
         setTimeout(() => {
@@ -422,19 +475,6 @@ export default function VideosPage() {
       setTimeout(() => {
         awardCredits(video);
       }, 30000); // Award credits after 30 seconds of watching
-      // In real implementation, save to backend
-      try {
-        await fetch('/api/videos/watch', {
-          method: 'POST',
-          headers: { 
-            'Content-Type': 'application/json',
-            'X-Username': username || ''
-          },
-          body: JSON.stringify({ videoId: video.id })
-        });
-      } catch (error) {
-        console.error('Failed to track video watch:', error);
-      }
     }
   };
 

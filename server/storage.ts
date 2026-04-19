@@ -92,6 +92,8 @@ export interface IStorage {
   submitAssignment(studentUsername: string, assignmentId: string, filesOrList: string | string[]): Promise<{ ok: true; submission: AssignmentSubmission } | { ok: false; error: string }>;
   listAssignmentSubmissionsForTeacher(teacherUsername: string, assignmentId?: string): Promise<Array<AssignmentSubmission & { studentUsername: string; studentName?: string; className?: string; section?: string; assignmentMaxPoints?: number }>>;
   reviewAssignmentSubmission(teacherUsername: string, submissionId: string, decision: { status: 'approved' | 'rejected'; points?: number; feedback?: string }): Promise<{ ok: true } | { ok: false; error: string }>;
+  listAssignmentSubmissionsForAdmin(adminUsername: string, assignmentId?: string): Promise<Array<AssignmentSubmission & { studentUsername: string; studentName?: string; className?: string; section?: string; assignmentMaxPoints?: number }>>;
+  reviewAdminAssignmentSubmission(adminUsername: string, submissionId: string, decision: { status: 'approved' | 'rejected'; points?: number; feedback?: string }): Promise<{ ok: true } | { ok: false; error: string }>;
   // Admin quizzes CRUD
   updateAdminQuiz(adminUsername: string, id: string, updates: { title?: string; description?: string; points?: number; questions?: Array<{ id?: string; text: string; options: string[]; answerIndex: number }> }): Promise<{ ok: true; quiz: Quiz } | { ok: false; error: string }>;
   deleteAdminQuiz(adminUsername: string, id: string): Promise<{ ok: true } | { ok: false; error: string }>;
@@ -109,6 +111,7 @@ export interface IStorage {
   // Video Management
   getAllVideos(): Promise<Video[]>;
   getTeacherVideos(teacherId: string): Promise<Video[]>;
+  getTeacherVideosCount(teacherUsername: string): Promise<number>;
   createVideo(input: { title: string; description?: string; type: 'youtube' | 'file'; url: string; thumbnail?: string; credits: number; uploadedBy: string; category?: string; duration?: number }): Promise<Video>;
   updateVideo(id: string, updates: Partial<{ title: string; description: string; type: 'youtube' | 'file'; url: string; thumbnail: string; credits: number; category: string; duration: number; uploadedBy: string }>): Promise<Video>;
   deleteVideo(id: string): Promise<void>;
@@ -1965,6 +1968,52 @@ export class MemStorage implements IStorage {
     return { ok: true as const };
   }
 
+  async listAssignmentSubmissionsForAdmin(adminUsername: string, assignmentId?: string) {
+    const entry = this.findUserEntryByUsername(adminUsername);
+    if (!entry) return [] as Array<AssignmentSubmission & { studentUsername: string; studentName?: string; className?: string; section?: string; assignmentMaxPoints?: number }>;
+    const [aid] = entry;
+    if (this.roles.get(aid) !== 'admin') return [] as Array<AssignmentSubmission & { studentUsername: string; studentName?: string; className?: string; section?: string; assignmentMaxPoints?: number }>;
+    const results: Array<AssignmentSubmission & { studentUsername: string; studentName?: string; className?: string; section?: string; assignmentMaxPoints?: number }> = [];
+    this.assignmentSubmissions.forEach((s) => {
+      const asn = this.assignments.get(s.assignmentId);
+      if (!asn || asn.visibility !== 'global') return;
+      const inScope = assignmentId ? s.assignmentId === assignmentId : true;
+      if (!inScope) return;
+      const user = this.users.get(s.studentUserId);
+      const prof = this.profiles.get(s.studentUserId) || {};
+      results.push({
+        ...s,
+        studentUsername: user?.username || 'student',
+        studentName: (prof as any).name,
+        className: (prof as any).className,
+        section: (prof as any).section,
+        assignmentMaxPoints: asn?.maxPoints,
+      });
+    });
+    return results.sort((a,b)=> b.submittedAt - a.submittedAt);
+  }
+
+  async reviewAdminAssignmentSubmission(adminUsername: string, submissionId: string, decision: { status: 'approved' | 'rejected'; points?: number; feedback?: string }) {
+    const entry = this.findUserEntryByUsername(adminUsername);
+    if (!entry) return { ok: false as const, error: 'Admin not found' };
+    const [aid] = entry;
+    if (this.roles.get(aid) !== 'admin') return { ok: false as const, error: 'Not an admin' };
+    const submission = this.assignmentSubmissions.get(submissionId);
+    if (!submission) return { ok: false as const, error: 'Submission not found' };
+    const asn = this.assignments.get(submission.assignmentId);
+    if (!asn || asn.visibility !== 'global') return { ok: false as const, error: 'Not allowed' };
+    const status = decision.status;
+    if (status === 'approved') {
+      const pts = Number(decision.points ?? 0);
+      if (!Number.isFinite(pts) || pts < 0 || pts > asn.maxPoints) return { ok: false as const, error: 'Invalid points' };
+      this.assignmentSubmissions.set(submissionId, { ...submission, status: 'approved', points: pts, reviewedByUserId: aid, reviewedAt: Date.now(), feedback: decision.feedback });
+    } else {
+      this.assignmentSubmissions.set(submissionId, { ...submission, status: 'rejected', points: 0, reviewedByUserId: aid, reviewedAt: Date.now(), feedback: decision.feedback });
+    }
+    this.save();
+    return { ok: true as const };
+  }
+
   // ===== Quizzes (simple MCQ, create/list) =====
   async createQuiz(teacherUsername: string, input: { title: string; description?: string; points?: number; questions: Array<{ text: string; options: string[]; answerIndex: number }> }) {
     const entry = this.findUserEntryByUsername(teacherUsername);
@@ -2147,20 +2196,21 @@ export class MemStorage implements IStorage {
 
   async getTeacherOverview(teacherUsername: string) {
     const entry = this.findUserEntryByUsername(teacherUsername);
-    if (!entry) return { tasks:0, assignments:0, quizzes:0, announcements:0, students:0, pendingSubmissions:0 };
+    if (!entry) return { tasks:0, assignments:0, quizzes:0, announcements:0, videos:0, students:0, pendingSubmissions:0 };
     const [tid] = entry;
-    if (this.roles.get(tid) !== 'teacher') return { tasks:0, assignments:0, quizzes:0, announcements:0, students:0, pendingSubmissions:0 };
+    if (this.roles.get(tid) !== 'teacher') return { tasks:0, assignments:0, quizzes:0, announcements:0, videos:0, students:0, pendingSubmissions:0 };
     const tasks = Array.from(this.tasks.values()).filter(t => t.createdByUserId === tid).length;
     const assignments = Array.from(this.assignments.values()).filter(a => a.createdByUserId === tid).length;
     const quizzes = Array.from(this.quizzes.values()).filter(q => q.createdByUserId === tid).length;
     const announcements = Array.from(this.announcements.values()).filter(a => a.createdByUserId === tid).length;
+    const videos = Array.from(this.videos.values()).filter(v => v.uploadedBy === teacherUsername || v.uploadedBy === tid).length;
     const students = (await this.listStudentsForTeacher(teacherUsername)).length;
   const ownedTaskIds = new Set(Array.from(this.tasks.values()).filter(t => t.createdByUserId === tid).map(t => t.id));
   const ownedAssignmentIds = new Set(Array.from(this.assignments.values()).filter(a => a.createdByUserId === tid).map(a => a.id));
   let pendingSubmissions = 0;
   this.submissions.forEach(s => { if (ownedTaskIds.has(s.taskId) && s.status === 'submitted') pendingSubmissions++; });
   this.assignmentSubmissions.forEach(s => { if (ownedAssignmentIds.has(s.assignmentId) && s.status === 'submitted') pendingSubmissions++; });
-    return { tasks, assignments, quizzes, announcements, students, pendingSubmissions };
+    return { tasks, assignments, quizzes, announcements, videos, students, pendingSubmissions };
   }
 
   // ===== Activity logging & notifications =====
@@ -2389,6 +2439,13 @@ export class MemStorage implements IStorage {
     return Array.from(this.videos.values())
       .filter(v => v.uploadedBy === teacherId)
       .sort((a, b) => b.uploadedAt - a.uploadedAt);
+  }
+
+  async getTeacherVideosCount(teacherUsername: string): Promise<number> {
+    const entry = this.findUserEntryByUsername(teacherUsername);
+    if (!entry) return 0;
+    const [tid] = entry;
+    return Array.from(this.videos.values()).filter(v => v.uploadedBy === teacherUsername || v.uploadedBy === tid).length;
   }
 
   async createVideo(input: { title: string; description?: string; type: 'youtube' | 'file'; url: string; thumbnail?: string; credits: number; uploadedBy: string; category?: string; duration?: number }): Promise<Video> {

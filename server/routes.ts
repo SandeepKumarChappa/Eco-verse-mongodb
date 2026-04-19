@@ -745,6 +745,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
     if (!r.ok) return res.status(400).json({ error: r.error });
     res.json({ ok: true });
   });
+  app.get('/api/admin/assignment-submissions', async (req, res) => {
+    const current = (req.headers['x-username'] as string) || '';
+    const assignmentId = (req.query.assignmentId as string) || undefined;
+    const list = await (storage as any).listAssignmentSubmissionsForAdmin(current, assignmentId);
+    res.json(list);
+  });
+  app.post('/api/admin/assignment-submissions/:id/review', async (req, res) => {
+    const current = (req.headers['x-username'] as string) || '';
+    const { status, points, feedback } = req.body ?? {};
+    const r = await (storage as any).reviewAdminAssignmentSubmission(current, req.params.id, { status, points, feedback });
+    if (!r.ok) return res.status(400).json({ error: r.error });
+    res.json({ ok: true });
+  });
 
   // ===== Student: Assignments & Submissions =====
   app.get('/api/student/assignments', async (req, res) => {
@@ -1138,7 +1151,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Award credits for watching a video
   app.post('/api/videos/watch', async (req, res) => {
     try {
-      const { videoId, username } = req.body;
+      const current = (req.headers['x-username'] as string) || '';
+      const { videoId, username: bodyUsername } = req.body;
+      const username = bodyUsername || current;
       const result = await storage.recordVideoWatch(username, videoId);
       res.json(result);
     } catch (error) {
@@ -1150,8 +1165,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Award credits endpoint
   app.post('/api/videos/award-credits', async (req, res) => {
     try {
-      const { username, videoId, credits } = req.body;
-      const result = await storage.awardCredits(username, videoId, credits);
+      const current = (req.headers['x-username'] as string) || '';
+      const { username: bodyUsername, videoId } = req.body;
+      const username = bodyUsername || current;
+      const result = await storage.recordVideoWatch(username, videoId);
       res.json(result);
     } catch (error) {
       console.error('Error awarding credits:', error);
@@ -1241,6 +1258,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error('Error fetching teacher videos:', error);
       res.status(500).json({ error: 'Failed to fetch videos' });
+    }
+  });
+
+  app.get('/api/teacher/videos/count', async (req, res) => {
+    try {
+      const current = (req.headers['x-username'] as string) || '';
+      const count = await storage.getTeacherVideosCount(current);
+      res.json({ count });
+    } catch (error) {
+      console.error('Error fetching teacher videos count:', error);
+      res.status(500).json({ error: 'Failed to fetch videos count' });
     }
   });
 

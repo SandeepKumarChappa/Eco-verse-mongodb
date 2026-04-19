@@ -125,9 +125,33 @@ function TeacherOverview() {
 
   useEffect(() => {
     let mounted = true;
-    fetch('/api/teacher/overview', { headers: { 'X-Username': username || '' } })
-      .then(r => r.json())
-      .then(d => { if (mounted) setData(d); });
+    const loadVideosCount = async () => {
+      try {
+        const countRes = await fetch('/api/teacher/videos/count', { headers: { 'X-Username': username || '' } });
+        if (countRes.ok) {
+          const data = await countRes.json();
+          return Number(data?.count || 0);
+        }
+      } catch {
+        // Fallback below handles unavailable endpoint during rolling updates.
+      }
+
+      try {
+        const listRes = await fetch(`/api/teacher/videos?teacherId=${encodeURIComponent(username || '')}`, { headers: { 'X-Username': username || '' } });
+        const list = listRes.ok ? await listRes.json() : [];
+        return Array.isArray(list) ? list.length : 0;
+      } catch {
+        return 0;
+      }
+    };
+
+    Promise.all([
+      fetch('/api/teacher/overview', { headers: { 'X-Username': username || '' } }).then(r => r.json()),
+      loadVideosCount(),
+    ]).then(([overview, videosCount]) => {
+      if (!mounted) return;
+      setData({ ...overview, videos: Number.isFinite(videosCount) ? videosCount : 0 });
+    });
     return () => { mounted = false; };
   }, [username]);
 
@@ -167,7 +191,7 @@ function TeacherOverview() {
                 <div className="flex items-start justify-between">
                   <div>
                     <p className="text-white/70 text-sm mb-2">{stat.label}</p>
-                    <p className="text-4xl font-bold text-white">{stat.value}</p>
+                    <p className="text-4xl font-bold text-white">{stat.value === undefined || stat.value === null || stat.value === '' ? 0 : stat.value}</p>
                   </div>
                   <div className={`p-3 rounded-xl bg-white/10 ${stat.iconColor}`}>
                     <Icon className="w-6 h-6" />
@@ -193,6 +217,7 @@ function TeacherTasks() {
   const [maxGroupSize, setMaxGroupSize] = useState(4);
   const [loading, setLoading] = useState(false);
   const [submissions, setSubmissions] = useState<Array<any>>([]);
+  const [taskSubmissionSummary, setTaskSubmissionSummary] = useState<Record<string, { total: number; pending: number }>>({});
   const [activeTaskId, setActiveTaskId] = useState<string | null>(null);
   const [activeTaskTitle, setActiveTaskTitle] = useState<string>("");
   const [subsLoading, setSubsLoading] = useState(false);
@@ -202,18 +227,40 @@ function TeacherTasks() {
     setTasks(Array.isArray(list) ? list : []);
   };
 
+  const fetchSubs = async (taskId?: string) => {
+    const url = taskId ? `/api/teacher/submissions?taskId=${encodeURIComponent(taskId)}` : '/api/teacher/submissions';
+    const list = await fetch(url, { headers: { 'X-Username': username || '' } }).then(r => r.json());
+    return Array.isArray(list) ? list : [];
+  };
+
+  const refreshTaskSummary = async () => {
+    const all = await fetchSubs();
+    const next: Record<string, { total: number; pending: number }> = {};
+    all.forEach((s: any) => {
+      const key = String(s.taskId || '');
+      if (!key) return;
+      if (!next[key]) next[key] = { total: 0, pending: 0 };
+      next[key].total += 1;
+      if (s.status === 'submitted') next[key].pending += 1;
+    });
+    setTaskSubmissionSummary(next);
+  };
+
   const loadSubs = async (taskId?: string) => {
     setSubsLoading(true);
     try {
-      const url = taskId ? `/api/teacher/submissions?taskId=${encodeURIComponent(taskId)}` : '/api/teacher/submissions';
-      const list = await fetch(url, { headers: { 'X-Username': username || '' } }).then(r => r.json());
-      setSubmissions(Array.isArray(list) ? list : []);
+      const list = await fetchSubs(taskId);
+      setSubmissions(list);
     } finally {
       setSubsLoading(false);
     }
   };
 
-  useEffect(() => { load(); loadSubs(); }, []);
+  useEffect(() => {
+    load();
+    loadSubs();
+    refreshTaskSummary();
+  }, []);
 
   const create = async () => {
     if (!title.trim()) return;
@@ -237,6 +284,7 @@ function TeacherTasks() {
       return alert(e?.error || 'Failed to review');
     }
     await loadSubs(activeTaskId || undefined);
+    await refreshTaskSummary();
   };
 
   const seed = async () => {
@@ -310,10 +358,24 @@ function TeacherTasks() {
                 className="bg-white/10 border border-white/20 rounded-xl p-4 backdrop-blur-xl hover:bg-white/15 transition-all cursor-pointer"
                 onClick={() => { setActiveTaskId(t.id); setActiveTaskTitle(t.title); loadSubs(t.id); }}
               >
-                <h4 className="font-semibold text-white mb-2">{t.title}</h4>
+                <div className="flex items-start justify-between gap-3 mb-2">
+                  <h4 className="font-semibold text-white">{t.title}</h4>
+                  <div className="shrink-0 flex items-center gap-2">
+                    <span className="text-[11px] px-2 py-1 rounded-full bg-white/15 border border-white/20 text-white/80">
+                      {taskSubmissionSummary[t.id]?.total || 0} submission{(taskSubmissionSummary[t.id]?.total || 0) === 1 ? '' : 's'}
+                    </span>
+                    {(taskSubmissionSummary[t.id]?.pending || 0) > 0 && (
+                      <span className="relative inline-flex h-2.5 w-2.5">
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+                        <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-amber-300"></span>
+                      </span>
+                    )}
+                  </div>
+                </div>
                 {t.description && <p className="text-white/70 text-sm mb-2">{t.description}</p>}
                 <div className="flex items-center justify-between text-xs text-white/60">
                   <span>📋 Max {t.maxPoints} pts</span>
+                  {(taskSubmissionSummary[t.id]?.pending || 0) > 0 && <span className="text-amber-300">Needs review: {taskSubmissionSummary[t.id]?.pending}</span>}
                   {t.deadline && <span>⏰ {t.deadline}</span>}
                 </div>
               </motion.div>
@@ -606,6 +668,7 @@ function TeacherAssignments() {
   const [deadline, setDeadline] = useState('');
   const [maxPoints, setMaxPoints] = useState(10);
   const [subs, setSubs] = useState<any[]>([]);
+  const [assignmentSubmissionSummary, setAssignmentSubmissionSummary] = useState<Record<string, { total: number; pending: number }>>({});
   const [subsLoading, setSubsLoading] = useState(false);
   const [activeAssignmentId, setActiveAssignmentId] = useState<string | null>(null);
   const [activeAssignmentTitle, setActiveAssignmentTitle] = useState<string>('');
@@ -615,18 +678,48 @@ function TeacherAssignments() {
     setList(Array.isArray(data) ? data : []);
   };
 
+  const fetchSubs = async (assignmentId?: string) => {
+    const url = assignmentId ? `/api/teacher/assignment-submissions?assignmentId=${encodeURIComponent(assignmentId)}` : '/api/teacher/assignment-submissions';
+    const data = await fetch(url, { headers: { 'X-Username': username || '' } }).then(r => r.json());
+    return Array.isArray(data) ? data : [];
+  };
+
+  const refreshAssignmentSummary = async () => {
+    const all = await fetchSubs();
+    const next: Record<string, { total: number; pending: number }> = {};
+    all.forEach((s: any) => {
+      const key = String(s.assignmentId || '');
+      if (!key) return;
+      if (!next[key]) next[key] = { total: 0, pending: 0 };
+      next[key].total += 1;
+      if (s.status === 'submitted') next[key].pending += 1;
+    });
+    setAssignmentSubmissionSummary(next);
+  };
+
   const loadSubs = async (assignmentId?: string) => {
     setSubsLoading(true);
     try {
-      const url = assignmentId ? `/api/teacher/assignment-submissions?assignmentId=${encodeURIComponent(assignmentId)}` : '/api/teacher/assignment-submissions';
-      const data = await fetch(url, { headers: { 'X-Username': username || '' } }).then(r => r.json());
-      setSubs(Array.isArray(data) ? data : []);
+      const data = await fetchSubs(assignmentId);
+      setSubs(data);
     } finally {
       setSubsLoading(false);
     }
   };
 
-  useEffect(() => { load(); loadSubs(); }, []);
+  useEffect(() => {
+    load();
+    loadSubs();
+    refreshAssignmentSummary();
+  }, []);
+
+  useEffect(() => {
+    const id = window.setInterval(() => {
+      loadSubs(activeAssignmentId || undefined);
+      refreshAssignmentSummary();
+    }, 8000);
+    return () => window.clearInterval(id);
+  }, [activeAssignmentId, username]);
 
   const create = async () => {
     if (!title.trim()) return;
@@ -648,6 +741,7 @@ function TeacherAssignments() {
       return alert(e?.error || 'Failed to review');
     }
     await loadSubs(activeAssignmentId || undefined);
+    await refreshAssignmentSummary();
   };
 
   return (
@@ -694,10 +788,24 @@ function TeacherAssignments() {
                 className="bg-white/10 border border-white/20 rounded-xl p-4 backdrop-blur-xl cursor-pointer hover:bg-white/15 transition-all"
                 onClick={() => { setActiveAssignmentId(a.id); setActiveAssignmentTitle(a.title); loadSubs(a.id); }}
               >
-                <h4 className="font-semibold text-white mb-2">{a.title}</h4>
+                <div className="flex items-start justify-between gap-3 mb-2">
+                  <h4 className="font-semibold text-white">{a.title}</h4>
+                  <div className="shrink-0 flex items-center gap-2">
+                    <span className="text-[11px] px-2 py-1 rounded-full bg-white/15 border border-white/20 text-white/80">
+                      {assignmentSubmissionSummary[a.id]?.total || 0} submission{(assignmentSubmissionSummary[a.id]?.total || 0) === 1 ? '' : 's'}
+                    </span>
+                    {(assignmentSubmissionSummary[a.id]?.pending || 0) > 0 && (
+                      <span className="relative inline-flex h-2.5 w-2.5">
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+                        <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-amber-300"></span>
+                      </span>
+                    )}
+                  </div>
+                </div>
                 {a.description && <p className="text-white/70 text-sm mb-2">{a.description}</p>}
                 <div className="flex items-center justify-between text-xs text-white/60">
                   <span>📋 Max {a.maxPoints} pts</span>
+                  {(assignmentSubmissionSummary[a.id]?.pending || 0) > 0 && <span className="text-amber-300">Needs review: {assignmentSubmissionSummary[a.id]?.pending}</span>}
                   {a.deadline && <span>⏰ {a.deadline}</span>}
                 </div>
               </motion.div>
@@ -881,14 +989,31 @@ function TeacherVideosManager() {
     }
     setIsUploading(true);
     try {
+      let duration: number | undefined;
+      try {
+        const metaRes = await fetch('/api/videos/youtube-metadata', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-Username': username || '' },
+          body: JSON.stringify({ url: form.youtubeUrl.trim() })
+        });
+        if (metaRes.ok) {
+          const meta = await metaRes.json();
+          const parsed = Number(meta?.duration);
+          if (Number.isFinite(parsed) && parsed > 0) duration = parsed;
+        }
+      } catch {
+        // Keep upload resilient even if metadata lookup fails.
+      }
+
       const videoData = {
         title: form.title,
         description: form.description,
         category: form.category,
         difficulty: form.difficulty,
         credits: form.credits,
-        embedUrl: generateYouTubeEmbedUrl(form.youtubeUrl),
+        url: form.youtubeUrl.trim(),
         thumbnail: form.thumbnailUrl || generateYouTubeThumbnail(form.youtubeUrl),
+        duration,
         teacherId: username,
         type: 'youtube'
       };
@@ -1025,16 +1150,34 @@ function TeacherVideosManager() {
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className="block text-sm mb-2">Category</label>
-                    <select className="w-full rounded-lg px-3 py-2 bg-white/10 border border-white/20 text-white text-sm" value={form.category} onChange={e => setForm({ ...form, category: e.target.value })}>
-                      {categories.map(c => <option key={c} value={c}>{c}</option>)}
+                    <select
+                      className="w-full rounded-lg px-3 py-2 bg-white/95 border border-white/30 text-slate-900 text-sm"
+                      style={{ backgroundColor: '#ffffff', color: '#0f172a' }}
+                      value={form.category}
+                      onChange={e => setForm({ ...form, category: e.target.value })}
+                    >
+                      {categories.map(c => (
+                        <option
+                          key={c}
+                          value={c}
+                          style={{ backgroundColor: '#ffffff', color: '#0f172a' }}
+                        >
+                          {c}
+                        </option>
+                      ))}
                     </select>
                   </div>
                   <div>
                     <label className="block text-sm mb-2">Difficulty</label>
-                    <select className="w-full rounded-lg px-3 py-2 bg-white/10 border border-white/20 text-white text-sm" value={form.difficulty} onChange={e => setForm({ ...form, difficulty: e.target.value })}>
-                      <option>Beginner</option>
-                      <option>Intermediate</option>
-                      <option>Advanced</option>
+                    <select
+                      className="w-full rounded-lg px-3 py-2 bg-white/95 border border-white/30 text-slate-900 text-sm"
+                      style={{ backgroundColor: '#ffffff', color: '#0f172a' }}
+                      value={form.difficulty}
+                      onChange={e => setForm({ ...form, difficulty: e.target.value })}
+                    >
+                      <option style={{ backgroundColor: '#ffffff', color: '#0f172a' }}>Beginner</option>
+                      <option style={{ backgroundColor: '#ffffff', color: '#0f172a' }}>Intermediate</option>
+                      <option style={{ backgroundColor: '#ffffff', color: '#0f172a' }}>Advanced</option>
                     </select>
                   </div>
                 </div>
@@ -1119,7 +1262,9 @@ function TeacherVideosManager() {
                         Are you sure you want to delete "{v.title}"? This action cannot be undone.
                       </AlertDialogDescription>
                       <div className="flex gap-2 justify-end">
-                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                        <AlertDialogCancel className="bg-slate-700 text-white border border-white/30 hover:bg-slate-600 hover:text-white">
+                          Cancel
+                        </AlertDialogCancel>
                         <AlertDialogAction className="bg-red-600 hover:bg-red-700" onClick={() => deleteVideo(v.id)}>
                           Delete
                         </AlertDialogAction>
@@ -1177,7 +1322,7 @@ function TeacherStudents() {
             </div>
             <h4 className="font-semibold text-white">{s.name || 'Student'}</h4>
             <p className="text-white/70 text-sm">@{s.username}</p>
-            <p className="text-white/60 text-xs mt-2">📚 {s.className || 'N/A'} • {s.section || 'N/A'}</p>
+            <p className="text-white/60 text-xs mt-2">Class: {s.className || 'N/A'} | Section: {s.section || 'N/A'}</p>
           </motion.div>
         ))}
       </div>
@@ -1266,7 +1411,13 @@ function TeacherProfile() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [schools, setSchools] = useState<Array<{ id: string; name: string }>>([]);
+  const [schoolName, setSchoolName] = useState('');
   const [data, setData] = useState<any>({});
+
+  const resolveSchoolName = (schoolId: string, schoolList: Array<{ id: string; name: string }>) => {
+    const match = schoolList.find((s) => s.id === schoolId);
+    return match ? match.name : schoolId;
+  };
 
   useEffect(() => {
     let mounted = true;
@@ -1274,11 +1425,13 @@ function TeacherProfile() {
       try {
         const [p, s] = await Promise.all([
           fetch('/api/me/profile', { headers: { 'X-Username': username || '' } }).then(r => r.json()),
-          fetch('/api/schools').then(r => r.json()),
+          fetch('/api/schools').then(r => r.json()).catch(() => []),
         ]);
         if (!mounted) return;
         setData(p || {});
-        setSchools(Array.isArray(s) ? s : []);
+        const schoolList = Array.isArray(s) ? s : [];
+        setSchools(schoolList);
+        setSchoolName(resolveSchoolName(String(p?.schoolId || ''), schoolList));
       } finally {
         if (mounted) setLoading(false);
       }
@@ -1298,7 +1451,39 @@ function TeacherProfile() {
   const save = async () => {
     setSaving(true);
     try {
-      const res = await fetch('/api/me/profile', { method: 'PUT', headers: { 'Content-Type': 'application/json', 'X-Username': username || '' }, body: JSON.stringify({ name: data.name || '', email: data.email || '', schoolId: data.schoolId || '', photoDataUrl: data.photoDataUrl || '', teacherId: data.teacherId || '', subject: data.subject || '' }) });
+      let nextSchoolId = String(data.schoolId || '');
+      const normalizedSchoolName = schoolName.trim();
+
+      if (normalizedSchoolName) {
+        const existing = schools.find((s) => s.name.toLowerCase() === normalizedSchoolName.toLowerCase());
+        if (existing) {
+          nextSchoolId = existing.id;
+        } else {
+          const createSchoolRes = await fetch('/api/admin/schools', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-Username': username || '' },
+            body: JSON.stringify({ name: normalizedSchoolName }),
+          });
+          if (createSchoolRes.ok) {
+            const created = await createSchoolRes.json();
+            if (created?.id) {
+              nextSchoolId = created.id;
+              setSchools(prev => [...prev, created]);
+            }
+          } else {
+            // If school already exists with different casing, refresh and try lookup again.
+            const refreshedSchools = await fetch('/api/schools').then(r => r.json()).catch(() => []);
+            const list = Array.isArray(refreshedSchools) ? refreshedSchools : [];
+            setSchools(list);
+            const refreshedMatch = list.find((s: any) => String(s?.name || '').toLowerCase() === normalizedSchoolName.toLowerCase());
+            if (refreshedMatch?.id) {
+              nextSchoolId = refreshedMatch.id;
+            }
+          }
+        }
+      }
+
+      const res = await fetch('/api/me/profile', { method: 'PUT', headers: { 'Content-Type': 'application/json', 'X-Username': username || '' }, body: JSON.stringify({ name: data.name || '', email: data.email || '', schoolId: nextSchoolId, photoDataUrl: data.photoDataUrl || '', teacherId: data.teacherId || '', subject: data.subject || '' }) });
       if (!res.ok) {
         const e = await res.json().catch(() => ({} as any));
         alert(e?.error || 'Failed to save profile');
@@ -1306,6 +1491,7 @@ function TeacherProfile() {
       }
       const p = await res.json();
       setData(p);
+      setSchoolName(resolveSchoolName(String(p?.schoolId || ''), schools));
       alert('Profile saved successfully!');
     } finally {
       setSaving(false);
@@ -1346,7 +1532,7 @@ function TeacherProfile() {
               <div>
                 <h3 className="text-2xl font-bold text-white mb-2">{data.name || username}</h3>
                 <p className="text-white/70">@{username}</p>
-                <p className="text-white/60 text-sm mt-2">Teacher • {data.schoolId || 'No school selected'}</p>
+                <p className="text-white/60 text-sm mt-2">Teacher • {schoolName || 'No school selected'}</p>
               </div>
             </div>
             <label className="inline-block">
@@ -1372,11 +1558,13 @@ function TeacherProfile() {
                 <input className="w-full rounded-lg px-4 py-2 bg-white/10 border border-white/20 text-white" value={data.email || ''} onChange={e => setData({ ...data, email: e.target.value })} />
               </div>
               <div>
-                <label className="block text-white/70 text-sm mb-2">School</label>
-                <select className="w-full rounded-lg px-4 py-2 bg-white/10 border border-white/20 text-white" value={data.schoolId || ''} onChange={e => setData({ ...data, schoolId: e.target.value })}>
-                  <option value="">Select school...</option>
-                  {schools.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-                </select>
+                <label className="block text-white/70 text-sm mb-2">School Name</label>
+                <input
+                  className="w-full rounded-lg px-4 py-2 bg-white/10 border border-white/20 text-white"
+                  value={schoolName}
+                  onChange={e => setSchoolName(e.target.value)}
+                  placeholder="Enter school name"
+                />
               </div>
               <div>
                 <label className="block text-white/70 text-sm mb-2">Teacher ID</label>

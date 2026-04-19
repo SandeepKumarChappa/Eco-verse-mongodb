@@ -860,8 +860,8 @@ export default function AdminPortal() {
         </div>
 
         {/* Tab Navigation */}
-        <div className="mb-6 overflow-x-auto">
-          <div className="flex gap-2 pb-2">
+        <div className="mb-6 pl-14">
+          <div className="flex flex-wrap gap-2 pb-2">
             {tabNames.map((tab_item, i) => {
               if (!visibleTabIndexes.includes(i)) return null;
               const Icon = tab_item.icon;
@@ -1737,6 +1737,11 @@ function GlobalAssignments() {
   const [description, setDescription] = useState('');
   const [deadline, setDeadline] = useState('');
   const [maxPoints, setMaxPoints] = useState(10);
+  const [subs, setSubs] = useState<any[]>([]);
+  const [assignmentSubmissionSummary, setAssignmentSubmissionSummary] = useState<Record<string, { total: number; pending: number }>>({});
+  const [subsLoading, setSubsLoading] = useState(false);
+  const [activeAssignmentId, setActiveAssignmentId] = useState<string | null>(null);
+  const [activeAssignmentTitle, setActiveAssignmentTitle] = useState<string>('');
   const [editingId, setEditingId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [removingId, setRemovingId] = useState<string | null>(null);
@@ -1744,7 +1749,49 @@ function GlobalAssignments() {
     const data = await fetch('/api/admin/assignments', { headers: { 'X-Username': username || '' } }).then(r => r.json());
     setList(Array.isArray(data) ? data : []);
   };
-  useEffect(() => { load(); }, []);
+
+  const fetchSubs = async (assignmentId?: string) => {
+    const url = assignmentId ? `/api/admin/assignment-submissions?assignmentId=${encodeURIComponent(assignmentId)}` : '/api/admin/assignment-submissions';
+    const data = await fetch(url, { headers: { 'X-Username': username || '' } }).then(r => r.json());
+    return Array.isArray(data) ? data : [];
+  };
+
+  const refreshAssignmentSummary = async () => {
+    const all = await fetchSubs();
+    const next: Record<string, { total: number; pending: number }> = {};
+    all.forEach((s: any) => {
+      const key = String(s.assignmentId || '');
+      if (!key) return;
+      if (!next[key]) next[key] = { total: 0, pending: 0 };
+      next[key].total += 1;
+      if (s.status === 'submitted') next[key].pending += 1;
+    });
+    setAssignmentSubmissionSummary(next);
+  };
+
+  const loadSubs = async (assignmentId?: string) => {
+    setSubsLoading(true);
+    try {
+      const data = await fetchSubs(assignmentId);
+      setSubs(data);
+    } finally {
+      setSubsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    load();
+    loadSubs();
+    refreshAssignmentSummary();
+  }, []);
+
+  useEffect(() => {
+    const id = window.setInterval(() => {
+      loadSubs(activeAssignmentId || undefined);
+      refreshAssignmentSummary();
+    }, 8000);
+    return () => window.clearInterval(id);
+  }, [activeAssignmentId, username]);
   const resetForm = () => {
     setEditingId(null);
     setTitle('');
@@ -1774,6 +1821,7 @@ function GlobalAssignments() {
     }
     resetForm();
     await load();
+    await refreshAssignmentSummary();
     setSaving(false);
   };
   const remove = async (id: string) => {
@@ -1787,8 +1835,26 @@ function GlobalAssignments() {
     }
     if (editingId === id) resetForm();
     await load();
+    await refreshAssignmentSummary();
     setRemovingId(null);
   };
+
+  const review = async (id: string, status: 'approved' | 'rejected', points?: number) => {
+    const body: any = { status };
+    if (typeof points !== 'undefined') body.points = points;
+    const res = await fetch(`/api/admin/assignment-submissions/${encodeURIComponent(id)}/review`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Username': username || '' },
+      body: JSON.stringify(body)
+    });
+    if (!res.ok) {
+      const e = await res.json().catch(() => ({} as any));
+      return alert(e?.error || 'Failed to review');
+    }
+    await loadSubs(activeAssignmentId || undefined);
+    await refreshAssignmentSummary();
+  };
+
   return (
     <div>
       <h2 className="text-xl font-semibold mb-3">Global Assignments</h2>
@@ -1814,19 +1880,46 @@ function GlobalAssignments() {
           <div className="space-y-2">
             {list.length === 0 && <p className="text-sm text-earth-muted">No assignments yet.</p>}
             {list.map(a => (
-              <div key={a.id} className="p-3 rounded-xl bg-[var(--earth-card)] border border-[var(--earth-border)] transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg hover:border-emerald-300/30">
+              <div
+                key={a.id}
+                className="p-3 rounded-xl bg-[var(--earth-card)] border border-[var(--earth-border)] transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg hover:border-emerald-300/30 cursor-pointer"
+                onClick={() => {
+                  setActiveAssignmentId(a.id);
+                  setActiveAssignmentTitle(a.title);
+                  loadSubs(a.id);
+                }}
+              >
                 <div className="font-medium flex items-start justify-between gap-3">
-                  <div>
-                    <div>{a.title} <span className="text-xs text-earth-muted">| Max {a.maxPoints} pts</span></div>
-                    {a.description && <div className="text-sm text-earth-muted mt-1">{a.description}</div>}
-                    {a.deadline && <div className="text-xs text-earth-muted mt-1">Deadline: {new Date(a.deadline).toLocaleDateString('en-GB')}</div>}
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-start justify-between gap-3 mb-1">
+                      <div className="break-words">{a.title} <span className="text-xs text-earth-muted">| Max {a.maxPoints} pts</span></div>
+                      <div className="shrink-0 flex items-center gap-2">
+                        <span className="text-[11px] px-2 py-1 rounded-full bg-white/15 border border-white/20 text-earth-muted">
+                          {assignmentSubmissionSummary[a.id]?.total || 0} submission{(assignmentSubmissionSummary[a.id]?.total || 0) === 1 ? '' : 's'}
+                        </span>
+                        {(assignmentSubmissionSummary[a.id]?.pending || 0) > 0 && (
+                          <span className="relative inline-flex h-2.5 w-2.5">
+                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+                            <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-amber-300"></span>
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    {a.description && <div className="text-sm text-earth-muted mt-1 break-words">{a.description}</div>}
+                    <div className="flex items-center justify-between gap-3 text-xs text-earth-muted mt-1">
+                      {a.deadline ? <div>Deadline: {new Date(a.deadline).toLocaleDateString('en-GB')}</div> : <div />}
+                      {(assignmentSubmissionSummary[a.id]?.pending || 0) > 0 && <div className="text-amber-300">Needs review: {assignmentSubmissionSummary[a.id]?.pending}</div>}
+                    </div>
                   </div>
                   <div className="flex gap-2 shrink-0">
                     <button
                       type="button"
                       title="Edit assignment"
                       aria-label="Edit assignment"
-                      onClick={() => startEdit(a)}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        startEdit(a);
+                      }}
                       className="h-9 w-9 rounded-full border border-emerald-400/60 bg-emerald-500/20 text-emerald-300 flex items-center justify-center transition-all duration-200 hover:bg-emerald-500/35 hover:text-emerald-100 hover:scale-105 active:scale-95"
                     >
                       <Edit3 className="h-4 w-4" />
@@ -1835,7 +1928,10 @@ function GlobalAssignments() {
                       type="button"
                       title="Delete assignment"
                       aria-label="Delete assignment"
-                      onClick={() => remove(a.id)}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        remove(a.id);
+                      }}
                       disabled={removingId === a.id}
                       className="h-9 w-9 rounded-full border border-red-400/60 bg-red-500/20 text-red-300 flex items-center justify-center transition-all duration-200 hover:bg-red-500/35 hover:text-red-100 hover:scale-105 active:scale-95 disabled:opacity-60 disabled:cursor-not-allowed"
                     >
@@ -1847,6 +1943,90 @@ function GlobalAssignments() {
             ))}
           </div>
         </div>
+      </div>
+
+      <div className="mt-6 p-4 rounded-2xl border border-white/10 bg-white/5 shadow-lg backdrop-blur-md">
+        <div className="flex items-center justify-between mb-3 gap-3">
+          <h3 className="font-semibold">{activeAssignmentId ? `Submissions for "${activeAssignmentTitle}"` : 'All Assignment Submissions'}</h3>
+          {activeAssignmentId && (
+            <Button variant="secondary" size="sm" onClick={() => { setActiveAssignmentId(null); setActiveAssignmentTitle(''); loadSubs(); }}>
+              Show All
+            </Button>
+          )}
+        </div>
+        {subsLoading ? (
+          <p className="text-sm text-earth-muted">Loading submissions...</p>
+        ) : subs.length === 0 ? (
+          <p className="text-sm text-earth-muted">No submissions yet.</p>
+        ) : (
+          <div className="space-y-3 max-h-96 overflow-y-auto pr-1">
+            {subs.map((s) => (
+              <AdminAssignmentSubmissionCard key={s.id} s={s} onReview={review} />
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function AdminAssignmentSubmissionCard({ s, onReview }: { s: any; onReview: (id: string, status: 'approved' | 'rejected', points?: number) => Promise<void> }) {
+  const [points, setPoints] = useState<number>(() => {
+    const current = Number(s.points);
+    return Number.isFinite(current) ? current : 0;
+  });
+  const maxPts = Number(s.assignmentMaxPoints || 10);
+  const approved = s.status === 'approved';
+  const rejected = s.status === 'rejected';
+  const submitted = s.status === 'submitted';
+
+  return (
+    <div className="bg-white/5 border border-white/10 rounded-xl p-4">
+      <div className="flex items-start justify-between gap-4 mb-3">
+        <div className="text-sm flex-1 min-w-0">
+          <div className="font-medium break-words">@{s.studentUsername} {s.studentName && <span className="text-earth-muted">• {s.studentName}</span>}</div>
+          {(s.className || s.section) && (
+            <div className="text-xs text-earth-muted mt-1">Class: {s.className || '-'} | Section: {s.section || '-'}</div>
+          )}
+        </div>
+        <div className="text-xs text-earth-muted shrink-0">{new Date(s.submittedAt).toLocaleString()}</div>
+      </div>
+
+      {Array.isArray(s.files) && s.files.length > 0 && (
+        <div className="flex gap-2 mb-3 flex-wrap">
+          {s.files.map((f: string, i: number) => (
+            <a key={i} href={f} target="_blank" rel="noreferrer" className="px-2 py-1 text-xs rounded border border-white/20 text-blue-300 hover:text-blue-200">
+              File {i + 1}
+            </a>
+          ))}
+        </div>
+      )}
+
+      <div className="flex items-end gap-3 flex-wrap">
+        {submitted && (
+          <>
+            <div className="flex items-center gap-2">
+              <label className="text-sm text-earth-muted">Points:</label>
+              <input
+                className="w-16 rounded-lg px-2 py-1 bg-white/10 border border-white/20 text-sm"
+                type="number"
+                min={0}
+                max={maxPts}
+                value={points}
+                onChange={e => setPoints(Number(e.target.value))}
+              />
+              <span className="text-xs text-earth-muted">/ {maxPts}</span>
+            </div>
+            <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700" onClick={() => onReview(s.id, 'approved', points)}>
+              Approve
+            </Button>
+            <Button size="sm" className="bg-red-600 hover:bg-red-700" onClick={() => onReview(s.id, 'rejected')}>
+              Reject
+            </Button>
+          </>
+        )}
+        {approved && <span className="text-sm text-emerald-400 font-medium">Approved | {s.points} pts</span>}
+        {rejected && <span className="text-sm text-red-400 font-medium">Rejected</span>}
       </div>
     </div>
   );
@@ -1938,14 +2118,31 @@ function AdminVideosManager() {
 
     setIsUploading(true);
     try {
+      let duration: number | undefined;
+      try {
+        const metaRes = await fetch('/api/videos/youtube-metadata', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-Username': username || '' },
+          body: JSON.stringify({ url: form.youtubeUrl.trim() })
+        });
+        if (metaRes.ok) {
+          const meta = await metaRes.json();
+          const parsed = Number(meta?.duration);
+          if (Number.isFinite(parsed) && parsed > 0) duration = parsed;
+        }
+      } catch {
+        // Keep upload resilient even if metadata lookup fails.
+      }
+
       const videoData = {
         title: form.title,
         description: form.description,
         category: form.category,
         difficulty: form.difficulty,
         credits: form.credits,
-        embedUrl: generateYouTubeEmbedUrl(form.youtubeUrl),
+        url: form.youtubeUrl.trim(),
         thumbnail: form.thumbnailUrl || generateYouTubeThumbnail(form.youtubeUrl),
+        duration,
         uploadedBy: username,
         type: 'youtube'
       };
@@ -2222,10 +2419,16 @@ function AdminVideosManager() {
                   <select
                     value={form.category}
                     onChange={(e) => setForm({ ...form, category: e.target.value })}
-                    className="w-full rounded-lg px-3 py-2 bg-white/10 border border-white/20 text-white"
+                    className="w-full rounded-lg px-3 py-2 bg-white/95 border border-white/30 text-slate-900"
+                    style={{ backgroundColor: '#ffffff', color: '#0f172a' }}
                   >
                     {categories.map(category => (
-                      <option key={category} value={category} className="bg-gray-800 text-white">
+                      <option
+                        key={category}
+                        value={category}
+                        className="bg-white text-slate-900"
+                        style={{ backgroundColor: '#ffffff', color: '#0f172a' }}
+                      >
                         {category}
                       </option>
                     ))}
@@ -2237,11 +2440,12 @@ function AdminVideosManager() {
                   <select
                     value={form.difficulty}
                     onChange={(e) => setForm({ ...form, difficulty: e.target.value })}
-                    className="w-full rounded-lg px-3 py-2 bg-white/10 border border-white/20 text-white"
+                    className="w-full rounded-lg px-3 py-2 bg-white/95 border border-white/30 text-slate-900"
+                    style={{ backgroundColor: '#ffffff', color: '#0f172a' }}
                   >
-                    <option value="Beginner" className="bg-gray-800 text-white">Beginner</option>
-                    <option value="Intermediate" className="bg-gray-800 text-white">Intermediate</option>
-                    <option value="Advanced" className="bg-gray-800 text-white">Advanced</option>
+                    <option value="Beginner" className="bg-white text-slate-900" style={{ backgroundColor: '#ffffff', color: '#0f172a' }}>Beginner</option>
+                    <option value="Intermediate" className="bg-white text-slate-900" style={{ backgroundColor: '#ffffff', color: '#0f172a' }}>Intermediate</option>
+                    <option value="Advanced" className="bg-white text-slate-900" style={{ backgroundColor: '#ffffff', color: '#0f172a' }}>Advanced</option>
                   </select>
                 </div>
 
@@ -2250,10 +2454,11 @@ function AdminVideosManager() {
                   <select
                     value={form.credits}
                     onChange={(e) => setForm({ ...form, credits: Number(e.target.value) })}
-                    className="w-full rounded-lg px-3 py-2 bg-white/10 border border-white/20 text-white"
+                    className="w-full rounded-lg px-3 py-2 bg-white/95 border border-white/30 text-slate-900"
+                    style={{ backgroundColor: '#ffffff', color: '#0f172a' }}
                   >
-                    <option value={1} className="bg-gray-800 text-white">1 Credit</option>
-                    <option value={2} className="bg-gray-800 text-white">2 Credits</option>
+                    <option value={1} className="bg-white text-slate-900" style={{ backgroundColor: '#ffffff', color: '#0f172a' }}>1 Credit</option>
+                    <option value={2} className="bg-white text-slate-900" style={{ backgroundColor: '#ffffff', color: '#0f172a' }}>2 Credits</option>
                   </select>
                 </div>
               </div>

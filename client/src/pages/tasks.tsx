@@ -376,7 +376,10 @@ export default function TasksPage() {
                         
                         {/* Expanded content */}
                         {isExpanded && (
-                          <div className="mt-6 pt-6 border-t border-white/20 animate-in fade-in slide-in-from-top-2 duration-300">
+                          <div
+                            className="mt-6 pt-6 border-t border-white/20 animate-in fade-in slide-in-from-top-2 duration-300"
+                            onClick={(e) => e.stopPropagation()}
+                          >
                             <div className="space-y-3 text-sm">
                               <div className="flex items-center gap-2 text-white/80">
                                 <Image size={16} className="text-cyan-300" /> Proof: {task.proofType}
@@ -412,7 +415,10 @@ export default function TasksPage() {
                               
                               {task.groupMode === 'group' && (
                                 <Button 
-                                  onClick={() => ensureGroup(task.id)}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    ensureGroup(task.id);
+                                  }}
                                   className="w-full bg-blue-500/80 hover:bg-blue-600/80 text-white border border-blue-400/50 rounded-lg transition-all"
                                 >
                                   👥 Manage Group
@@ -454,6 +460,7 @@ export default function TasksPage() {
                                               <div key={i} className="relative group/thumb">
                                                 <img src={p} alt={`Selected ${i+1}`} className="h-16 w-16 object-cover rounded border border-white/30" />
                                                 <button 
+                                                  type="button"
                                                   className="absolute -top-2 -right-2 h-6 w-6 rounded-full bg-red-500/80 text-white text-xs hover:bg-red-600/80 flex items-center justify-center opacity-0 group-hover/thumb:opacity-100 transition-opacity" 
                                                   onClick={() => setStagedPhotos(prev => ({ ...prev, [task.id]: (prev[task.id] || []).filter((_, idx) => idx !== i) }))}
                                                 >
@@ -468,7 +475,10 @@ export default function TasksPage() {
                                       <Button 
                                         className="w-full bg-emerald-500/80 hover:bg-emerald-600/80 text-white border border-emerald-400/50 rounded-lg transition-all"
                                         disabled={loading || !(stagedPhotos[task.id]?.length)} 
-                                        onClick={() => submitProof(task.id, stagedPhotos[task.id] || [])}
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          submitProof(task.id, stagedPhotos[task.id] || []);
+                                        }}
                                       >
                                         🚀 {submission ? 'Resubmit' : 'Submit'}
                                       </Button>
@@ -476,7 +486,10 @@ export default function TasksPage() {
                                   ) : (
                                     <Button 
                                       variant="secondary" 
-                                      onClick={() => setResubmitOpen(prev => ({ ...prev, [task.id]: true }))}
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setResubmitOpen(prev => ({ ...prev, [task.id]: true }));
+                                      }}
                                       className="w-full bg-white/20 hover:bg-white/30 text-white border-white/30 rounded-lg transition-all"
                                     >
                                       🔄 Resubmit
