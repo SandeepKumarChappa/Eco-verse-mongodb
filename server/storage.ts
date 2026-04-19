@@ -98,7 +98,7 @@ export interface IStorage {
   updateAdminQuiz(adminUsername: string, id: string, updates: { title?: string; description?: string; points?: number; questions?: Array<{ id?: string; text: string; options: string[]; answerIndex: number }> }): Promise<{ ok: true; quiz: Quiz } | { ok: false; error: string }>;
   deleteAdminQuiz(adminUsername: string, id: string): Promise<{ ok: true } | { ok: false; error: string }>;
   // Leaderboard
-  getGlobalSchoolsLeaderboard(limit?: number): Promise<Array<{ schoolId: string; schoolName: string; ecoPoints: number; students: number }>>;
+  getGlobalSchoolsLeaderboard(limit?: number): Promise<Array<{ schoolId: string; schoolName: string; ecoPoints: number; students: number; topStudent?: { username: string; name?: string; ecoPoints: number } }>>;
   getSchoolStudentsLeaderboard(schoolId: string, limit?: number, offset?: number): Promise<Array<{ username: string; name?: string; ecoPoints: number }>>;
   getStudentPreview(targetUsername: string): Promise<{ username: string; name?: string; ecoPoints: number; schoolId?: string } | null>;
   getGlobalStudentsLeaderboard(limit?: number, offset?: number, schoolIdFilter?: string | null): Promise<Array<{ username: string; name?: string; schoolId?: string; schoolName?: string; ecoPoints: number; achievements?: string[]; snapshot?: { tasksApproved: number; quizzesCompleted: number } }>>;
@@ -1004,6 +1004,13 @@ export class MemStorage implements IStorage {
   // ===== Leaderboard helpers =====
   async getGlobalSchoolsLeaderboard(limit = 25) {
     const perSchool = new Map<string, { eco: number; students: number }>();
+    const studentEco = new Map<string, number>();
+
+    const addStudentEco = (studentUserId: string, points: number) => {
+      if (this.roles.get(studentUserId) !== 'student') return;
+      studentEco.set(studentUserId, (studentEco.get(studentUserId) || 0) + Number(points || 0));
+    };
+
     // prime with student counts
     this.users.forEach((u, id) => {
       if (this.roles.get(id) === 'student') {
@@ -1018,7 +1025,9 @@ export class MemStorage implements IStorage {
       if (s.status === 'approved') {
         const sid = (this.profiles.get(s.studentUserId) || {}).schoolId || '';
         if (!perSchool.has(sid)) perSchool.set(sid, { eco: 0, students: 0 });
-        perSchool.get(sid)!.eco += Number(s.points || 0);
+        const points = Number(s.points || 0);
+        perSchool.get(sid)!.eco += points;
+        addStudentEco(s.studentUserId, points);
       }
     });
     // quiz points
@@ -1027,21 +1036,39 @@ export class MemStorage implements IStorage {
       const quiz = this.quizzes.get(a.quizId);
       if (!quiz) return;
       if (!perSchool.has(sid)) perSchool.set(sid, { eco: 0, students: 0 });
-      perSchool.get(sid)!.eco += Number(quiz.points || 0);
+      const points = Number(quiz.points || 0);
+      perSchool.get(sid)!.eco += points;
+      addStudentEco(a.studentUserId, points);
     });
     // lesson points
     this.lessonCompletions.forEach(lc => {
       const sid = (this.profiles.get(lc.studentUserId) || {}).schoolId || '';
       if (!perSchool.has(sid)) perSchool.set(sid, { eco: 0, students: 0 });
-      perSchool.get(sid)!.eco += Number(lc.points || 0);
+      const points = Number(lc.points || 0);
+      perSchool.get(sid)!.eco += points;
+      addStudentEco(lc.studentUserId, points);
     });
     const schools = Array.from(this.schools.values());
-    const rows = Array.from(perSchool.entries()).map(([schoolId, v]) => ({
-      schoolId,
-      schoolName: schools.find(s => s.id === schoolId)?.name || (schoolId || 'Unknown School'),
-      ecoPoints: v.eco,
-      students: v.students,
-    }));
+    const rows = Array.from(perSchool.entries()).map(([schoolId, v]) => {
+      let topStudent: { username: string; name?: string; ecoPoints: number } | undefined;
+      this.users.forEach((u, id) => {
+        if (this.roles.get(id) !== 'student') return;
+        const p = this.profiles.get(id) || {};
+        if ((p.schoolId || '') !== schoolId) return;
+        const eco = studentEco.get(id) || 0;
+        if (!topStudent || eco > topStudent.ecoPoints) {
+          topStudent = { username: u.username, name: p.name, ecoPoints: eco };
+        }
+      });
+
+      return {
+        schoolId,
+        schoolName: schools.find(s => s.id === schoolId)?.name || (schoolId || 'Unknown School'),
+        ecoPoints: v.eco,
+        students: v.students,
+        topStudent,
+      };
+    });
     rows.sort((a,b)=> b.ecoPoints - a.ecoPoints);
     return rows.slice(0, Math.max(1, Math.min(500, limit|0)));
   }
@@ -1083,6 +1110,21 @@ export class MemStorage implements IStorage {
     return { username: u.username, name: p.name, ecoPoints: eco, schoolId: p.schoolId };
   }
 
+  private getSchoolNameFromProfileSchoolId(rawSchoolId?: string): string | undefined {
+    const value = String(rawSchoolId || '').trim();
+    if (!value) return undefined;
+
+    const byId = this.schools.get(value);
+    if (byId?.name) return byId.name;
+
+    const normalized = value.toLowerCase();
+    const byName = Array.from(this.schools.values()).find((s) => s.name.trim().toLowerCase() === normalized);
+    if (byName?.name) return byName.name;
+
+    // Legacy fallback: some old records stored school name directly in schoolId.
+    return value;
+  }
+
   async getGlobalStudentsLeaderboard(limit = 50, offset = 0, schoolIdFilter: string | null = null) {
     const rows: Array<{ username: string; name?: string; schoolId?: string; schoolName?: string; ecoPoints: number; achievements?: string[]; snapshot?: { tasksApproved: number; quizzesCompleted: number } }> = [];
     this.users.forEach((u, id) => {
@@ -1095,13 +1137,13 @@ export class MemStorage implements IStorage {
         this.submissions.forEach(s => { if (s.studentUserId === id && s.status === 'approved') { eco += Number(s.points||0); tasksApproved++; } });
         this.quizAttempts.forEach(a => { if (a.studentUserId === id) { const q = this.quizzes.get(a.quizId); if (q) { eco += Number(q.points||0); quizzesCompleted++; } } });
         this.lessonCompletions.forEach(lc => { if (lc.studentUserId === id) eco += Number(lc.points || 0); });
-        const school = p.schoolId ? this.schools.get(p.schoolId) : undefined;
+        const schoolName = this.getSchoolNameFromProfileSchoolId(p.schoolId);
         const achievements: string[] = [];
         if (tasksApproved > 0) achievements.push('🥇 First Task');
         if (quizzesCompleted >= 3) achievements.push('🧠 Quiz Master');
         if (eco >= 100) achievements.push('🌲 Small Tree');
         if (eco >= 500) achievements.push('🌳 Big Tree');
-        rows.push({ username: u.username, name: p.name, schoolId: p.schoolId, schoolName: school?.name, ecoPoints: eco, achievements, snapshot: { tasksApproved, quizzesCompleted } });
+        rows.push({ username: u.username, name: p.name, schoolId: p.schoolId, schoolName, ecoPoints: eco, achievements, snapshot: { tasksApproved, quizzesCompleted } });
       }
     });
     rows.sort((a,b)=> b.ecoPoints - a.ecoPoints);
@@ -1130,8 +1172,8 @@ export class MemStorage implements IStorage {
       // quiz attempts by students on those quizzes
       this.quizAttempts.forEach(a => { if (ownedQuizIds.has(a.quizId)) { const q = this.quizzes.get(a.quizId); if (q) eco += Number(q.points||0); } });
       const u = this.users.get(tid)!;
-      const school = p.schoolId ? this.schools.get(p.schoolId) : undefined;
-      rows.push({ username: u.username, name: p.name, schoolId: p.schoolId, schoolName: school?.name, ecoPoints: eco, tasksCreated, quizzesCreated });
+      const schoolName = this.getSchoolNameFromProfileSchoolId(p.schoolId);
+      rows.push({ username: u.username, name: p.name, schoolId: p.schoolId, schoolName, ecoPoints: eco, tasksCreated, quizzesCreated });
     }
     rows.sort((a,b)=> b.ecoPoints - a.ecoPoints);
     const start = Math.max(0, offset|0);
@@ -1155,7 +1197,7 @@ export class MemStorage implements IStorage {
     const [id, u] = entry;
     if (this.roles.get(id) !== 'teacher') return null;
     const p = this.profiles.get(id) || {};
-    const school = p.schoolId ? this.schools.get(p.schoolId) : undefined;
+    const schoolName = this.getSchoolNameFromProfileSchoolId(p.schoolId);
     // compute same as teachers leaderboard for single teacher
     const ownedTaskIds = new Set(Array.from(this.tasks.values()).filter(t => t.createdByUserId === id).map(t => t.id));
     const tasksCreated = ownedTaskIds.size;
@@ -1164,7 +1206,7 @@ export class MemStorage implements IStorage {
     const ownedQuizIds = new Set(Array.from(this.quizzes.values()).filter(q => q.createdByUserId === id && q.visibility === 'school').map(q => q.id));
     const quizzesCreated = ownedQuizIds.size;
     this.quizAttempts.forEach(a => { if (ownedQuizIds.has(a.quizId)) { const q = this.quizzes.get(a.quizId); if (q) eco += Number(q.points||0); } });
-    return { username: u.username, name: p.name, schoolId: p.schoolId, schoolName: school?.name, ecoPoints: eco, tasksCreated, quizzesCreated };
+    return { username: u.username, name: p.name, schoolId: p.schoolId, schoolName, ecoPoints: eco, tasksCreated, quizzesCreated };
   }
 
   async getAdminLeaderboardAnalytics() {

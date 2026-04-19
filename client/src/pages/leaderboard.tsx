@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card";
 import { Button } from "@/components/ui/button";
 import SignupAnimatedBackground from "@/components/SignupAnimatedBackground";
@@ -42,7 +42,13 @@ const animationStyles = `
   }
 `;
 
-type SchoolRow = { schoolId: string; schoolName: string; ecoPoints: number; students: number };
+type SchoolRow = {
+  schoolId: string;
+  schoolName: string;
+  ecoPoints: number;
+  students: number;
+  topStudent?: { username: string; name?: string; ecoPoints: number };
+};
 type StudentRow = { username: string; name?: string; ecoPoints: number };
 type GlobalStudentRow = {
   username: string;
@@ -66,8 +72,6 @@ export default function LeaderboardPage() {
   const { username: me } = useAuth();
 
   // Header filters and tabs
-  type Scope = 'global' | 'school' | 'class';
-  const [scope, setScope] = useState<Scope>('global');
   type Tab = 'schools' | 'students' | 'teachers';
   const [tab, setTab] = useState<Tab>('schools');
   const [search, setSearch] = useState('');
@@ -105,10 +109,24 @@ export default function LeaderboardPage() {
       if (tab === 'students') {
         setLoadingTab(true);
         try {
-          const url = `/api/leaderboard/students?limit=100${schoolFilter ? `&schoolId=${encodeURIComponent(schoolFilter)}` : ''}`;
-          const res = await fetch(url);
-          const list = (await res.json()) as GlobalStudentRow[];
-          if (mounted) setGlobalStudents(Array.isArray(list) ? list : []);
+          const pageSize = 500;
+          let offset = 0;
+          const all: GlobalStudentRow[] = [];
+
+          while (true) {
+            const url = `/api/leaderboard/students?limit=${pageSize}&offset=${offset}${schoolFilter ? `&schoolId=${encodeURIComponent(schoolFilter)}` : ''}`;
+            const res = await fetch(url);
+            if (!res.ok) throw new Error(`${res.status}`);
+
+            const chunk = (await res.json()) as GlobalStudentRow[];
+            const rows = Array.isArray(chunk) ? chunk : [];
+            all.push(...rows);
+
+            if (rows.length < pageSize) break;
+            offset += pageSize;
+          }
+
+          if (mounted) setGlobalStudents(all);
         } catch {
           if (mounted) setGlobalStudents([]);
         } finally {
@@ -117,10 +135,24 @@ export default function LeaderboardPage() {
       } else if (tab === 'teachers') {
         setLoadingTab(true);
         try {
-          const url = `/api/leaderboard/teachers?limit=100${schoolFilter ? `&schoolId=${encodeURIComponent(schoolFilter)}` : ''}`;
-          const res = await fetch(url);
-          const list = (await res.json()) as TeacherRow[];
-          if (mounted) setTeachers(Array.isArray(list) ? list : []);
+          const pageSize = 500;
+          let offset = 0;
+          const all: TeacherRow[] = [];
+
+          while (true) {
+            const url = `/api/leaderboard/teachers?limit=${pageSize}&offset=${offset}${schoolFilter ? `&schoolId=${encodeURIComponent(schoolFilter)}` : ''}`;
+            const res = await fetch(url);
+            if (!res.ok) throw new Error(`${res.status}`);
+
+            const chunk = (await res.json()) as TeacherRow[];
+            const rows = Array.isArray(chunk) ? chunk : [];
+            all.push(...rows);
+
+            if (rows.length < pageSize) break;
+            offset += pageSize;
+          }
+
+          if (mounted) setTeachers(all);
         } catch {
           if (mounted) setTeachers([]);
         } finally {
@@ -193,21 +225,11 @@ export default function LeaderboardPage() {
 
       {/* Header filters - Enhanced */}
       <div className="flex flex-wrap items-center gap-3 mb-6 p-4 bg-white/5 backdrop-blur-xl border border-white/20 rounded-2xl">
-        <div className="inline-flex rounded-xl border border-white/30 bg-white/10 backdrop-blur-sm p-1 shadow-lg">
-          {(['global','school','class'] as const).map((s, idx) => (
-            <button 
-              key={s} 
-              onClick={()=>setScope(s)} 
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-all duration-300 ${
-                scope===s
-                  ?'bg-gradient-to-r from-blue-500 to-cyan-500 text-white shadow-lg shadow-blue-500/30' 
-                  :'text-white/70 hover:text-white/90 hover:bg-white/10'
-              }`}
-              style={{ animation: `fadeInLeft 0.6s ease-out ${idx * 0.1}s both` }}
-            >
-              {s==='global'?'🌍 Global':s==='school'?'🏫 School':'👥 Class'}
-            </button>
-          ))}
+        <div
+          className="inline-flex rounded-xl border border-white/30 bg-gradient-to-r from-blue-500 to-cyan-500 px-4 py-2 text-sm font-medium text-white shadow-lg shadow-blue-500/30"
+          style={{ animation: "fadeInLeft 0.6s ease-out both" }}
+        >
+          🌍 Global
         </div>
         
         <div className="inline-flex rounded-xl border border-white/30 bg-white/10 backdrop-blur-sm p-1 shadow-lg">
@@ -286,14 +308,21 @@ export default function LeaderboardPage() {
                         <School size={18} className="text-emerald-300 group-hover:scale-110 transition-transform" />
                         <span className="truncate font-medium group-hover:underline">{s.schoolName}</span>
                       </div>
-                      <div className="col-span-3 text-sm text-white/70 group-hover:text-white/90 transition-colors">—</div>
+                      <div className="col-span-3 text-sm text-white/70 group-hover:text-white/90 transition-colors truncate">
+                        {s.topStudent ? (
+                          <span>
+                            @{s.topStudent.username}
+                            {s.topStudent.name ? ` ${s.topStudent.name}` : ''}
+                          </span>
+                        ) : '—'}
+                      </div>
                       <div className="col-span-1 text-right text-white/70 flex items-center justify-end gap-1 group-hover:text-white transition-colors">
                         <Users size={16} /> {s.students}
                       </div>
                       <div className="col-span-2 text-right font-bold text-yellow-300 group-hover:text-yellow-200 transition-colors">{formatPoints(s.ecoPoints)}</div>
                     </button>
                   </HoverCardTrigger>
-                  <HoverCardContent>
+                  <HoverCardContent className="bg-slate-900/95 border-white/20 text-white backdrop-blur-xl">
                     <SchoolHoverPreview schoolId={s.schoolId} fallback={{ schoolName: s.schoolName, ecoPoints: s.ecoPoints, students: s.students }} />
                   </HoverCardContent>
                 </HoverCard>
@@ -349,7 +378,7 @@ export default function LeaderboardPage() {
                         <div className="col-span-1 text-right text-white/70 group-hover:text-white/90 transition-colors">{t.quizzesCreated}</div>
                       </div>
                     </HoverCardTrigger>
-                    <HoverCardContent>
+                    <HoverCardContent className="bg-slate-900/95 border-white/20 text-white backdrop-blur-xl">
                       <TeacherHoverPreview username={t.username} />
                     </HoverCardContent>
                   </HoverCard>
@@ -434,9 +463,9 @@ function SchoolHoverPreview({ schoolId, fallback }: { schoolId: string; fallback
 function StudentRowItem({ row, rank, isMe }: { row: StudentRow; rank: number; isMe: boolean }) {
   const [open, setOpen] = useState(false);
   return (
-    <HoverCard open={open} onOpenChange={(o)=>setOpen(o)}>
+    <HoverCard open={open} onOpenChange={setOpen}>
       <HoverCardTrigger asChild>
-        <div className="grid grid-cols-12 px-4 py-3 hover:bg-white/10 cursor-default text-white/90" onMouseEnter={()=>setOpen(true)} onMouseLeave={()=>setOpen(false)}>
+        <div className="grid grid-cols-12 px-4 py-3 hover:bg-white/10 cursor-default text-white/90">
           <div className="col-span-2 text-sm">#{rank}</div>
           <div className="col-span-6">
             <span className="font-medium">@{row.username}</span>
@@ -456,7 +485,7 @@ function GlobalStudentRowItem({ row, rank, isMe }: { row: GlobalStudentRow; rank
   return (
     <HoverCard open={open} onOpenChange={setOpen}>
       <HoverCardTrigger asChild>
-        <div className="grid grid-cols-12 px-4 py-3 hover:bg-white/10 cursor-default text-white/90" onMouseEnter={()=>setOpen(true)} onMouseLeave={()=>setOpen(false)}>
+        <div className="grid grid-cols-12 px-4 py-3 hover:bg-white/10 cursor-default text-white/90">
           <div className="col-span-2 text-sm">#{rank}</div>
           <div className="col-span-4">
             <span className="font-medium">@{row.username}</span>
@@ -504,7 +533,7 @@ function StudentHoverPreview({ username, open }: { username: string; open: boole
   }, [open, loaded, username]);
 
   return (
-    <HoverCardContent>
+    <HoverCardContent className="bg-slate-900/95 border-white/20 text-white backdrop-blur-xl">
       {!loaded && <div className="text-xs text-white/70">Loading…</div>}
       {error && <div className="text-xs text-red-300">{error}</div>}
       {data && (

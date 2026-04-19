@@ -153,6 +153,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json(schools);
   });
 
+  const resolveSchoolIdFromInput = async (rawSchool: unknown): Promise<string | null> => {
+    const input = String(rawSchool ?? '').trim();
+    if (!input) return null;
+
+    const schools = await storage.listSchools();
+
+    const byId = schools.find((s) => s.id === input);
+    if (byId) return byId.id;
+
+    const normalizedInput = input.toLowerCase();
+    const byName = schools.find((s) => s.name.trim().toLowerCase() === normalizedInput);
+    if (byName) return byName.id;
+
+    const created = await storage.addSchool(input);
+    return created.id;
+  };
+
   // Admin: add a new school/college (demo; no auth guard here)
   app.post('/api/admin/schools', async (req, res) => {
     const { name } = req.body ?? {};
@@ -175,11 +192,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const { name, email, username, schoolId, id, rollNumber, className, section, photoDataUrl, password } = req.body ?? {};
     if (!name || !email || !username || !schoolId || !id) return res.status(400).json({ error: 'Missing fields' });
     if (!(await storage.isUsernameAvailable(username))) return res.status(409).json({ error: 'Username taken' });
+
+    const resolvedSchoolId = await resolveSchoolIdFromInput(schoolId);
+    if (!resolvedSchoolId) return res.status(400).json({ error: 'Invalid school name' });
+
     const appData: StudentApplication = {
       name,
       email,
       username,
-      schoolId,
+      schoolId: resolvedSchoolId,
       studentId: id,
       rollNumber,
       className,
@@ -195,11 +216,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const { name, email, username, schoolId, id, subject, photoDataUrl, password } = req.body ?? {};
     if (!name || !email || !username || !schoolId || !id) return res.status(400).json({ error: 'Missing fields' });
     if (!(await storage.isUsernameAvailable(username))) return res.status(409).json({ error: 'Username taken' });
+
+    const resolvedSchoolId = await resolveSchoolIdFromInput(schoolId);
+    if (!resolvedSchoolId) return res.status(400).json({ error: 'Invalid school name' });
+
     const appData: TeacherApplication = {
       name,
       email,
       username,
-      schoolId,
+      schoolId: resolvedSchoolId,
       teacherId: id,
       subject,
       photoDataUrl,
