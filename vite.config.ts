@@ -8,7 +8,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 // Load .env from parent directory
-const envPath = path.resolve(import.meta.dirname, ".env");
+const envPath = path.resolve(__dirname, ".env");
 let envVars: Record<string, string> = {};
 
 if (fs.existsSync(envPath)) {
