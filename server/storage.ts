@@ -154,6 +154,13 @@ export class MemStorage implements IStorage {
   private saveInFlight: boolean;
   private saveRequestedWhileWriting: boolean;
 
+  private getRuntimeRoot() {
+    const cwd = typeof process.cwd === 'function' ? process.cwd() : '';
+    if (typeof cwd === 'string' && cwd.length > 0) return cwd;
+    console.warn('process.cwd() unavailable, falling back to current directory for storage path.');
+    return '.';
+  }
+
   constructor() {
     this.users = new Map();
     this.roles = new Map();
@@ -179,7 +186,7 @@ export class MemStorage implements IStorage {
   this.videos = new Map();
   this.userVideoProgress = new Map();
   this.userCredits = new Map();
-  this.dataFile = path.join(process.cwd(), 'server', 'data.json');
+  this.dataFile = path.join(this.getRuntimeRoot(), 'server', 'data.json');
   this.saveTimer = null;
   this.saveInFlight = false;
   this.saveRequestedWhileWriting = false;
