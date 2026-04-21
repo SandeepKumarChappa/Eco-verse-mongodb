@@ -22,6 +22,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
   };
 
   const AUTH_COOKIE = 'ev_token';
+  const cwd = typeof process.cwd === "function" ? process.cwd() : "";
+  const projectRoot = cwd && cwd.length > 0 ? cwd : path.resolve(getUploadsDir(), "..");
+  if (!cwd) {
+    console.warn("process.cwd() unavailable, falling back to derived project root for static paths.");
+  }
   const SESSION_IDLE_TIMEOUT_MS = 30 * 60 * 1000; // 30 minutes
   const SESSION_ABSOLUTE_TIMEOUT_MS = 8 * 60 * 60 * 1000; // 8 hours
   const envJwtSecret = process.env.JWT_SECRET?.trim();
@@ -147,7 +152,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Serve all assets under public/models (textures, bins, nested folders) so GLB dependencies resolve
-  const modelsRoot = path.join(process.cwd(), 'public', 'models');
+  const modelsRoot = path.join(projectRoot, 'public', 'models');
   app.use('/api/models', express.static(modelsRoot));
 
   // Serve any model from public/models safely
@@ -158,7 +163,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return res.status(400).json({ error: 'Invalid model filename' });
     }
 
-    const filePath = path.join(process.cwd(), 'public', 'models', file);
+    const filePath = path.join(projectRoot, 'public', 'models', file);
     res.type(path.extname(filePath));
     res.sendFile(filePath, (err) => {
       if (err) {
@@ -176,7 +181,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return res.status(400).json({ error: 'Invalid image filename' });
     }
 
-    const filePath = path.join(process.cwd(), 'public', file);
+    const filePath = path.join(projectRoot, 'public', file);
     res.type(path.extname(filePath));
     res.sendFile(filePath, (err) => {
       if (err) {

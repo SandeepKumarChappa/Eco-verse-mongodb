@@ -1,11 +1,21 @@
 import express, { type Express } from "express";
 import fs from "fs";
 import path from "path";
+import { fileURLToPath } from "url";
 import { createServer as createViteServer, createLogger } from "vite";
 import { type Server } from "http";
 import viteConfig from "../vite.config";
 
 const viteLogger = createLogger();
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+const getBaseDir = () => {
+  if (typeof __dirname === "string" && __dirname.length > 0) return __dirname;
+  const fallback = typeof process.cwd === "function" ? process.cwd() : ".";
+  console.warn("Invalid __dirname in vite.ts, using fallback base directory.");
+  return fallback;
+};
 
 export function log(message: string, source = "express") {
   const formattedTime = new Date().toLocaleTimeString("en-US", {
@@ -19,6 +29,7 @@ export function log(message: string, source = "express") {
 }
 
 export async function setupVite(app: Express, server: Server) {
+  const baseDir = getBaseDir();
   const serverOptions = {
     middlewareMode: true,
     hmr: { server },
@@ -47,7 +58,7 @@ export async function setupVite(app: Express, server: Server) {
 
     try {
       const clientTemplate = path.resolve(
-        import.meta.dirname,
+        baseDir,
         "..",
         "client",
         "index.html",
@@ -65,7 +76,8 @@ export async function setupVite(app: Express, server: Server) {
 }
 
 export function serveStatic(app: Express) {
-  const distPath = path.resolve(import.meta.dirname, "public");
+  const baseDir = getBaseDir();
+  const distPath = path.resolve(baseDir, "public");
 
   if (!fs.existsSync(distPath)) {
     throw new Error(

@@ -1,7 +1,19 @@
 import fs from "fs";
 import path from "path";
+import { fileURLToPath } from "url";
 
-const uploadsDir = path.join(process.cwd(), "uploads");
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+const getProjectRoot = () => {
+  const cwd = typeof process.cwd === "function" ? process.cwd() : "";
+  if (typeof cwd === "string" && cwd.length > 0) return cwd;
+  const fallback = path.resolve(__dirname, "..");
+  console.warn("process.cwd() unavailable, falling back to project root derived from module path.");
+  return fallback;
+};
+
+const uploadsDir = path.join(getProjectRoot(), "uploads");
 
 export const getUploadsDir = () => uploadsDir;
 
