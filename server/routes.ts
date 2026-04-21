@@ -2,24 +2,34 @@ import express, { type Express } from "express";
 import { createServer, type Server } from "http";
 import path from "path";
 import { randomBytes } from "crypto";
+import multer from "multer";
+import jwt from "jsonwebtoken";
+import bcrypt from "bcrypt";
 import { storage, type StudentApplication, type TeacherApplication } from "./storage";
 import { sendEmail, sendWelcomeEmail, sendApplicationStatusEmail } from "./email";
 import { GoogleGenerativeAI } from "@google/generative-ai";
+import { ensureUploadsDir, getUploadsDir } from "./uploads";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   type SessionRole = 'student' | 'teacher' | 'admin';
-  type SessionRecord = {
-    sid: string;
+  type JwtSessionPayload = {
     username: string;
     role: SessionRole;
-    createdAt: number;
+    sessionStart: number;
     lastActivityAt: number;
+    iat?: number;
+    exp?: number;
   };
 
-  const SESSION_COOKIE = 'ev_session';
+  const AUTH_COOKIE = 'ev_token';
   const SESSION_IDLE_TIMEOUT_MS = 30 * 60 * 1000; // 30 minutes
   const SESSION_ABSOLUTE_TIMEOUT_MS = 8 * 60 * 60 * 1000; // 8 hours
-  const sessions = new Map<string, SessionRecord>();
+  const envJwtSecret = process.env.JWT_SECRET?.trim();
+  const jwtSecret = envJwtSecret || randomBytes(32).toString('hex');
+
+  if (!envJwtSecret) {
+    console.warn('JWT_SECRET not set - using temporary secret (not safe for production)');
+  }
 
   const parseCookies = (cookieHeader?: string) => {
     const out: Record<string, string> = {};
@@ -32,8 +42,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     return out;
   };
 
-  const setSessionCookie = (res: any, sid: string) => {
-    res.cookie(SESSION_COOKIE, sid, {
+  const setAuthCookie = (res: any, token: string) => {
+    res.cookie(AUTH_COOKIE, token, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
@@ -42,8 +52,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     });
   };
 
-  const clearSessionCookie = (res: any) => {
-    res.clearCookie(SESSION_COOKIE, {
+  const clearAuthCookie = (res: any) => {
+    res.clearCookie(AUTH_COOKIE, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
@@ -51,29 +61,73 @@ export async function registerRoutes(app: Express): Promise<Server> {
     });
   };
 
-  const getActiveSession = (req: any, res?: any) => {
-    const cookies = parseCookies(req.headers.cookie as string | undefined);
-    const sid = cookies[SESSION_COOKIE];
-    if (!sid) return null;
-    const session = sessions.get(sid);
-    if (!session) {
-      if (res) clearSessionCookie(res);
-      return null;
-    }
-
-    const now = Date.now();
-    const idleExpired = now - session.lastActivityAt > SESSION_IDLE_TIMEOUT_MS;
-    const absoluteExpired = now - session.createdAt > SESSION_ABSOLUTE_TIMEOUT_MS;
-    if (idleExpired || absoluteExpired) {
-      sessions.delete(sid);
-      if (res) clearSessionCookie(res);
-      return null;
-    }
-
-    session.lastActivityAt = now;
-    sessions.set(sid, session);
-    return session;
+  const issueAuthToken = (session: JwtSessionPayload) => {
+    return jwt.sign(session, jwtSecret, { expiresIn: Math.ceil(SESSION_ABSOLUTE_TIMEOUT_MS / 1000) });
   };
+
+  const getTokenFromRequest = (req: any) => {
+    const authHeader = String(req.headers.authorization || '');
+    if (authHeader.toLowerCase().startsWith('bearer ')) {
+      return authHeader.slice(7).trim();
+    }
+    const cookies = parseCookies(req.headers.cookie as string | undefined);
+    return cookies[AUTH_COOKIE];
+  };
+
+  const getActiveSession = (req: any, res?: any) => {
+    const token = getTokenFromRequest(req);
+    if (!token) return null;
+    let payload: JwtSessionPayload;
+    try {
+      payload = jwt.verify(token, jwtSecret) as JwtSessionPayload;
+    } catch {
+      if (res) clearAuthCookie(res);
+      return null;
+    }
+    const now = Date.now();
+    const idleExpired = now - Number(payload.lastActivityAt || 0) > SESSION_IDLE_TIMEOUT_MS;
+    const absoluteExpired = now - Number(payload.sessionStart || 0) > SESSION_ABSOLUTE_TIMEOUT_MS;
+    if (idleExpired || absoluteExpired) {
+      if (res) clearAuthCookie(res);
+      return null;
+    }
+
+    const refreshedSession: JwtSessionPayload = {
+      username: payload.username,
+      role: payload.role,
+      sessionStart: payload.sessionStart,
+      lastActivityAt: now,
+    };
+    if (res) setAuthCookie(res, issueAuthToken(refreshedSession));
+    return refreshedSession;
+  };
+
+  const uploadsDir = getUploadsDir();
+  const uploadsDirStatus = ensureUploadsDir();
+  if (!uploadsDirStatus.ok) {
+    console.warn('Uploads directory could not be prepared at startup. File uploads may fail until permissions are fixed.');
+  }
+  app.use('/uploads', express.static(uploadsDir));
+
+  const uploadStorage = multer.diskStorage({
+    destination: (_req, _file, cb) => {
+      const result = ensureUploadsDir();
+      if (!result.ok) {
+        return cb(new Error('Uploads directory is unavailable'), result.uploadsDir);
+      }
+
+      cb(null, result.uploadsDir);
+    },
+    filename: (_req, file, cb) => {
+      const safeBase = path.basename(file.originalname).replace(/[^A-Za-z0-9._-]/g, '_');
+      cb(null, `${Date.now()}-${randomBytes(8).toString('hex')}-${safeBase}`);
+    },
+  });
+
+  const upload = multer({
+    storage: uploadStorage,
+    limits: { fileSize: 150 * 1024 * 1024 },
+  });
 
   const protectedPrefixes = ['/api/me', '/api/student', '/api/teacher', '/api/admin', '/api/learning'];
   app.use((req, res, next) => {
@@ -134,7 +188,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Health check endpoint
   app.get('/api/health', (req, res) => {
-    res.json({ status: 'ok', timestamp: new Date().toISOString() });
+    res.status(200).send('OK');
+  });
+
+  app.get('/api/stats', async (_req, res) => {
+    const storageAny = storage as any;
+    const users = Array.from(storageAny.users?.values?.() ?? []);
+    const roles = storageAny.roles as Map<string, SessionRole> | undefined;
+    const schools = Array.from(storageAny.schools?.values?.() ?? []);
+    const profiles = Array.from(storageAny.profiles?.values?.() ?? []);
+    const submissions = Array.from(storageAny.submissions?.values?.() ?? []);
+    const games = Array.from(storageAny.games?.values?.() ?? []);
+
+    const activeStudents = users.filter((user: any) => (roles?.get(user.id) ?? user.role) === 'student' && user.approved !== false).length;
+    const dedicatedTeachers = users.filter((user: any) => (roles?.get(user.id) ?? user.role) === 'teacher' && user.approved !== false).length;
+    const partnerSchools = schools.length;
+    const ecoPointsEarned = profiles.reduce((total: number, profile: any) => total + Number(profile?.ecoPoints || 0), 0);
+    const interactiveGames = games.length;
+    const tasksCompleted = submissions.length;
+
+    res.json({
+      activeStudents,
+      dedicatedTeachers,
+      partnerSchools,
+      ecoPointsEarned,
+      interactiveGames,
+      tasksCompleted,
+    });
   });
 
   // Games catalog (public)
@@ -233,7 +313,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Admin approvals
   app.get('/api/admin/pending', async (_req, res) => {
     const data = await storage.listPending();
-    res.json(data);
+    res.json({
+      students: data.students.map(({ password, ...rest }: any) => rest),
+      teachers: data.teachers.map(({ password, ...rest }: any) => rest),
+    });
   });
 
   app.post('/api/admin/approve/:type/:id', async (req, res) => {
@@ -272,7 +355,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const { username } = req.params;
     if (!username) return res.status(400).json({ error: 'Missing username' });
     const details = await (storage as any).getUserDetails(username);
-    res.json(details);
+    if (!details || typeof details !== 'object') return res.json(details);
+    const { password, ...safeDetails } = details;
+    res.json(safeDetails);
   });
 
   // Admin: reset password for a username (demo only, no auth)
@@ -299,31 +384,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json({ available });
   });
 
-  // Basic login (in-memory; demo only)
+  // Login
   app.post('/api/login', async (req, res) => {
     const { username, password } = req.body ?? {};
     if (!username || !password) return res.status(400).json({ error: 'Missing fields' });
-    // naive check across users
+
     const users = (storage as any).users as Map<string, any>;
     const roles = (storage as any).roles as Map<string, 'student'|'teacher'|'admin'>;
-    const found = Array.from(users?.values?.() ?? []).find((u) => u.username === username && u.password === password);
+    const found = Array.from(users?.values?.() ?? []).find((u) => u.username === username);
     if (!found) return res.status(401).json({ ok: false });
+
+    const isValidPassword = await bcrypt.compare(String(password), String(found.password || ''));
+    if (!isValidPassword) return res.status(401).json({ ok: false });
+
     const role = (roles?.get(found.id) ?? 'student') as SessionRole;
-
-    // Invalidate any existing session from this browser before issuing a new one.
-    const existing = parseCookies(req.headers.cookie as string | undefined)[SESSION_COOKIE];
-    if (existing) sessions.delete(existing);
-
-    const sid = randomBytes(32).toString('hex');
     const now = Date.now();
-    sessions.set(sid, {
-      sid,
+
+    const token = issueAuthToken({
       username: found.username,
       role,
-      createdAt: now,
+      sessionStart: now,
       lastActivityAt: now,
     });
-    setSessionCookie(res, sid);
+    setAuthCookie(res, token);
 
     res.json({
       ok: true,
@@ -335,9 +418,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   app.post('/api/logout', async (req, res) => {
-    const sid = parseCookies(req.headers.cookie as string | undefined)[SESSION_COOKIE];
-    if (sid) sessions.delete(sid);
-    clearSessionCookie(res);
+    clearAuthCookie(res);
     res.json({ ok: true });
   });
 
@@ -351,7 +432,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       role: session.role,
       expiresInMs: Math.min(
         SESSION_IDLE_TIMEOUT_MS - (now - session.lastActivityAt),
-        SESSION_ABSOLUTE_TIMEOUT_MS - (now - session.createdAt),
+        SESSION_ABSOLUTE_TIMEOUT_MS - (now - session.sessionStart),
       ),
     });
   });
@@ -364,7 +445,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       ok: true,
       expiresInMs: Math.min(
         SESSION_IDLE_TIMEOUT_MS - (now - session.lastActivityAt),
-        SESSION_ABSOLUTE_TIMEOUT_MS - (now - session.createdAt),
+        SESSION_ABSOLUTE_TIMEOUT_MS - (now - session.sessionStart),
       ),
     });
   });
@@ -1210,6 +1291,37 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Admin video management routes
+  app.post('/api/admin/videos/upload', upload.fields([{ name: 'video', maxCount: 1 }, { name: 'thumbnail', maxCount: 1 }]), async (req, res) => {
+    try {
+      const current = (req.headers['x-username'] as string) || '';
+      if (!current) return res.status(401).json({ error: 'Missing username' });
+
+      const files = req.files as { [fieldname: string]: Express.Multer.File[] } | undefined;
+      const videoFile = files?.video?.[0];
+      const thumbnailFile = files?.thumbnail?.[0];
+      if (!videoFile) return res.status(400).json({ error: 'Video file is required' });
+
+      const title = String(req.body?.title || '').trim();
+      if (!title) return res.status(400).json({ error: 'Title is required' });
+
+      const video = await storage.createVideo({
+        title,
+        description: String(req.body?.description || '').trim() || undefined,
+        type: 'file',
+        url: `/uploads/${videoFile.filename}`,
+        thumbnail: thumbnailFile ? `/uploads/${thumbnailFile.filename}` : undefined,
+        credits: Math.max(1, Math.floor(Number(req.body?.credits) || 1)),
+        uploadedBy: current,
+        category: String(req.body?.category || '').trim() || undefined,
+      });
+
+      res.json({ ok: true, video, fileUrl: video.url, thumbnailUrl: video.thumbnail });
+    } catch (error) {
+      console.error('Error uploading admin video file:', error);
+      res.status(500).json({ error: 'Failed to upload video file' });
+    }
+  });
+
   app.get('/api/admin/videos', async (_req, res) => {
     try {
       const videos = await storage.getAllVideos();
@@ -1272,6 +1384,37 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Teacher video management routes
+  app.post('/api/teacher/videos/upload', upload.fields([{ name: 'video', maxCount: 1 }, { name: 'thumbnail', maxCount: 1 }]), async (req, res) => {
+    try {
+      const current = (req.headers['x-username'] as string) || '';
+      if (!current) return res.status(401).json({ error: 'Missing username' });
+
+      const files = req.files as { [fieldname: string]: Express.Multer.File[] } | undefined;
+      const videoFile = files?.video?.[0];
+      const thumbnailFile = files?.thumbnail?.[0];
+      if (!videoFile) return res.status(400).json({ error: 'Video file is required' });
+
+      const title = String(req.body?.title || '').trim();
+      if (!title) return res.status(400).json({ error: 'Title is required' });
+
+      const video = await storage.createVideo({
+        title,
+        description: String(req.body?.description || '').trim() || undefined,
+        type: 'file',
+        url: `/uploads/${videoFile.filename}`,
+        thumbnail: thumbnailFile ? `/uploads/${thumbnailFile.filename}` : undefined,
+        credits: Math.max(1, Math.floor(Number(req.body?.credits) || 1)),
+        uploadedBy: current,
+        category: String(req.body?.category || '').trim() || undefined,
+      });
+
+      res.json({ ok: true, video, fileUrl: video.url, thumbnailUrl: video.thumbnail });
+    } catch (error) {
+      console.error('Error uploading teacher video file:', error);
+      res.status(500).json({ error: 'Failed to upload video file' });
+    }
+  });
+
   app.get('/api/teacher/videos', async (req, res) => {
     try {
       const videos = await storage.getTeacherVideos(req.query.teacherId as string);

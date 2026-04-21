@@ -90,8 +90,10 @@ npm start
 ```
 
 The application will be available at:
-- **Local**: `http://localhost:3000`
-- **Network**: `http://[your-ip]:3000`
+- **Local**: `http://localhost:5000`
+- **Network**: `http://[your-ip]:5000`
+
+Production starts the bundled server at `dist/index.js` and listens on port `5000` by default.
 
 ## 🔧 Troubleshooting
 
@@ -149,7 +151,7 @@ If you encounter issues:
 After successful installation:
 
 1. **Start the application**: `npm run dev`
-2. **Open your browser**: Navigate to `http://localhost:3000`
+2. **Open your browser**: Navigate to `http://localhost:5000`
 3. **Enjoy EcoVision!** 🌍
 
 ---

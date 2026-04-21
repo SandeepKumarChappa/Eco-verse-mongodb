@@ -2,6 +2,9 @@ import { orm } from './db';
 import { users } from './schema';
 import { randomUUID } from 'crypto';
 import { eq } from 'drizzle-orm';
+import bcrypt from 'bcrypt';
+
+const BCRYPT_SALT_ROUNDS = 10;
 
 export class DbStorage {
   async seedAdmin() {
@@ -12,7 +15,7 @@ export class DbStorage {
         name: 'Admin',
         email: 'admin@example.com',
         username: 'admin123',
-        password: 'admin@1234',
+        password: await bcrypt.hash('admin@1234', BCRYPT_SALT_ROUNDS),
         role: 'admin',
         approved: true,
       });
@@ -25,7 +28,7 @@ export class DbStorage {
       name: app.name,
       email: app.email,
       username: app.username,
-      password: app.password,
+      password: await bcrypt.hash(String(app.password || ''), BCRYPT_SALT_ROUNDS),
       role: 'teacher',
       schoolId: app.schoolId,
       subject: app.subject,
@@ -42,7 +45,7 @@ export class DbStorage {
       name: app.name,
       email: app.email,
       username: app.username,
-      password: app.password,
+      password: await bcrypt.hash(String(app.password || ''), BCRYPT_SALT_ROUNDS),
       role: 'student',
       schoolId: app.schoolId,
       subject: app.subject,

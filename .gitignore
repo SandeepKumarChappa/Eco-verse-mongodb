@@ -19,6 +19,7 @@ coverage/
 *.tsbuildinfo
 
 # Env & secrets (never commit)
+# Local environment file
 .env
 .env.*
 !.env.example

@@ -85,6 +85,8 @@ npm run build
 npm start
 ```
 
+Production listens on port `5000` by default. The bundled server entrypoint is `dist/index.js`.
+
 Notes
 - The server persists in-memory state to `server/data.json`.
 - Demo seeders are included for quick content and leaderboard demos.

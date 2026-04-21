@@ -1,42 +1,28 @@
 import 'dotenv/config';
 import express, { type Request, Response, NextFunction } from "express";
+import helmet from "helmet";
+import morgan from "morgan";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
+import { ensureUploadsDir } from "./uploads";
+
+process.env.NODE_ENV = process.env.NODE_ENV || "production";
+process.env.PORT = process.env.PORT || "5000";
+process.env.HOST = process.env.HOST || "0.0.0.0";
+
+ensureUploadsDir();
 
 const app = express(); // express app
+app.use(helmet({
+  contentSecurityPolicy: false,
+  crossOriginEmbedderPolicy: false,
+  crossOriginResourcePolicy: { policy: "cross-origin" },
+}));
+app.use(morgan("combined"));
+
 // Increase body size limits for base64 images
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: false, limit: '10mb' }));
-
-app.use((req, res, next) => {
-  const start = Date.now();
-  const path = req.path;
-  let capturedJsonResponse: Record<string, any> | undefined = undefined;
-
-  const originalResJson = res.json;
-  res.json = function (bodyJson, ...args) {
-    capturedJsonResponse = bodyJson;
-    return originalResJson.apply(res, [bodyJson, ...args]);
-  };
-
-  res.on("finish", () => {
-    const duration = Date.now() - start;
-    if (path.startsWith("/api")) {
-      let logLine = `${req.method} ${path} ${res.statusCode} in ${duration}ms`;
-      if (capturedJsonResponse) {
-        logLine += ` :: ${JSON.stringify(capturedJsonResponse)}`;
-      }
-
-      if (logLine.length > 80) {
-        logLine = logLine.slice(0, 79) + "…";
-      }
-
-      log(logLine);
-    }
-  });
-
-  next();
-});
 
 (async () => {
   // Ensure SQLite tables exist
@@ -78,7 +64,8 @@ app.use((req, res, next) => {
 
 // Serve the app on the port specified in the environment variable PORT.
 // Default host is 127.0.0.1 for local development.
-const port = parseInt(process.env.PORT || '5000', 10);
+const parsedPort = Number.parseInt(process.env.PORT || '5000', 10);
+const port = Number.isFinite(parsedPort) ? parsedPort : 5000;
 
 // Set HOST=0.0.0.0 only when you explicitly want external access.
 const host = process.env.HOST || '127.0.0.1';
@@ -89,7 +76,7 @@ server.listen(
     host,
   },
   () => {
-    log(`✅ Server running at http://${host}:${port}`);
+    log(`✅ Server running at http://${host}:${port} (PORT=${port})`);
   }
 );
 })();

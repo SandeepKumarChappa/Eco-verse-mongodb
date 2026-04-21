@@ -2,6 +2,9 @@ import { type User, type InsertUser } from "@shared/schema";
 import { randomUUID } from "crypto";
 import fs from "fs";
 import path from "path";
+import bcrypt from "bcrypt";
+
+const BCRYPT_SALT_ROUNDS = 10;
 
 export interface IStorage {
   getUser(id: string): Promise<User | undefined>;
@@ -239,6 +242,49 @@ export class MemStorage implements IStorage {
   this.ensureDemoGames();
       this.save();
     }
+
+    this.normalizeStoredPasswords();
+  }
+
+  private isPasswordHash(value: string) {
+    return /^\$2[aby]\$\d{2}\$/.test(value);
+  }
+
+  private toHashedPassword(value?: string) {
+    const normalized = String(value || "");
+    if (!normalized) return "";
+    if (this.isPasswordHash(normalized)) return normalized;
+    return bcrypt.hashSync(normalized, BCRYPT_SALT_ROUNDS);
+  }
+
+  private normalizeStoredPasswords() {
+    let changed = false;
+
+    this.users.forEach((u, id) => {
+      const hashed = this.toHashedPassword((u as any).password);
+      if ((u as any).password !== hashed) {
+        this.users.set(id, { ...u, password: hashed } as any);
+        changed = true;
+      }
+    });
+
+    this.pendingStudents.forEach((p, id) => {
+      const hashed = this.toHashedPassword((p as any).password);
+      if ((p as any).password !== hashed) {
+        this.pendingStudents.set(id, { ...p, password: hashed });
+        changed = true;
+      }
+    });
+
+    this.pendingTeachers.forEach((p, id) => {
+      const hashed = this.toHashedPassword((p as any).password);
+      if ((p as any).password !== hashed) {
+        this.pendingTeachers.set(id, { ...p, password: hashed });
+        changed = true;
+      }
+    });
+
+    if (changed) this.save();
   }
 
   // Public helper to ensure demo quizzes exist (dev only)
@@ -320,7 +366,7 @@ export class MemStorage implements IStorage {
 
       // Create approved user directly
       const id = randomUUID();
-      this.users.set(id, { id, username: uname, password: '123@123' });
+      this.users.set(id, { id, username: uname, password: this.toHashedPassword('123@123') });
       this.roles.set(id, 'student');
       this.profiles.set(id, {
         role: 'student',
@@ -502,7 +548,7 @@ export class MemStorage implements IStorage {
   private seedDefaults() {
     // Seed default admin and a couple schools and sample data
   const mainAdminId = randomUUID();
-  this.users.set(mainAdminId, { id: mainAdminId, username: "admin123", password: "admin@1234" });
+  this.users.set(mainAdminId, { id: mainAdminId, username: "admin123", password: this.toHashedPassword("admin@1234") });
   this.roles.set(mainAdminId, 'admin');
     const s1 = { id: randomUUID(), name: "Green Valley High" };
     const s2 = { id: randomUUID(), name: "Riverdale Academy" };
@@ -516,7 +562,7 @@ export class MemStorage implements IStorage {
     ];
     for (const s of pendingStudents) {
       const id = randomUUID();
-      this.pendingStudents.set(id, { ...s, id });
+      this.pendingStudents.set(id, { ...s, id, password: this.toHashedPassword(s.password) });
     }
     const pendingTeachers: TeacherApplication[] = [
       { name: 'Neha Sharma', email: 'neha.sharma@example.com', username: 'neha_s', schoolId: s1.id, teacherId: 'TCH2001', subject: 'Mathematics', password: '123@123' },
@@ -525,13 +571,13 @@ export class MemStorage implements IStorage {
     ];
     for (const t of pendingTeachers) {
       const id = randomUUID();
-      this.pendingTeachers.set(id, { ...t, id });
+      this.pendingTeachers.set(id, { ...t, id, password: this.toHashedPassword(t.password) });
     }
     const approvedStudentId = randomUUID();
-    this.users.set(approvedStudentId, { id: approvedStudentId, username: 'test_student', password: '123@123' });
+    this.users.set(approvedStudentId, { id: approvedStudentId, username: 'test_student', password: this.toHashedPassword('123@123') });
     this.roles.set(approvedStudentId, 'student');
     const approvedTeacherId = randomUUID();
-    this.users.set(approvedTeacherId, { id: approvedTeacherId, username: 'test_teacher', password: '123@123' });
+    this.users.set(approvedTeacherId, { id: approvedTeacherId, username: 'test_teacher', password: this.toHashedPassword('123@123') });
     this.roles.set(approvedTeacherId, 'teacher');
     // Basic profiles for admin/student/teacher
   const adminIdLookup = Array.from(this.users.entries()).find(([,u])=>u.username==='admin123')?.[0];
@@ -641,7 +687,7 @@ export class MemStorage implements IStorage {
 
   async createUser(insertUser: InsertUser): Promise<User> {
     const id = randomUUID();
-    const user: User = { ...insertUser, id };
+    const user: User = { ...insertUser, id, password: this.toHashedPassword((insertUser as any).password) };
     this.users.set(id, user);
     return user;
   }
@@ -667,7 +713,7 @@ export class MemStorage implements IStorage {
   // Signups
   async addStudentApplication(app: StudentApplication) {
     const id = randomUUID();
-    const stored = { ...app, id };
+    const stored = { ...app, id, password: this.toHashedPassword(app.password) };
     this.pendingStudents.set(id, stored);
   this.save();
     return stored;
@@ -675,7 +721,7 @@ export class MemStorage implements IStorage {
 
   async addTeacherApplication(app: TeacherApplication) {
     const id = randomUUID();
-    const stored = { ...app, id };
+    const stored = { ...app, id, password: this.toHashedPassword(app.password) };
     this.pendingTeachers.set(id, stored);
   this.save();
     return stored;
@@ -694,7 +740,7 @@ export class MemStorage implements IStorage {
       if (!app) return false;
       this.pendingStudents.delete(id);
       const userId = randomUUID();
-  this.users.set(userId, { id: userId, username: app.username, password: app.password ?? "" });
+  this.users.set(userId, { id: userId, username: app.username, password: this.toHashedPassword(app.password) });
   this.roles.set(userId, 'student');
   this.profiles.set(userId, {
     name: app.name,
@@ -714,7 +760,7 @@ export class MemStorage implements IStorage {
       if (!app) return false;
       this.pendingTeachers.delete(id);
       const userId = randomUUID();
-  this.users.set(userId, { id: userId, username: app.username, password: app.password ?? "" });
+  this.users.set(userId, { id: userId, username: app.username, password: this.toHashedPassword(app.password) });
   this.roles.set(userId, 'teacher');
   this.profiles.set(userId, {
     name: app.name,
@@ -765,7 +811,7 @@ export class MemStorage implements IStorage {
   async resetPassword(username: string, password: string) {
     const found = Array.from(this.users.values()).find(u => u.username === username);
     if (!found) return false;
-    this.users.set(found.id, { ...found, password });
+    this.users.set(found.id, { ...found, password: this.toHashedPassword(password) });
     this.save();
     return true;
   }
@@ -797,7 +843,7 @@ export class MemStorage implements IStorage {
         className: prof?.className || '',
         section: prof?.section || '',
         photoDataUrl: prof?.photoDataUrl,
-        password: user.password,
+        password: this.toHashedPassword(user.password),
       };
       this.pendingStudents.set(pending.id!, pending);
     } else {
@@ -810,7 +856,7 @@ export class MemStorage implements IStorage {
         teacherId: prof?.teacherId || 'REVIEW',
         subject: prof?.subject || '',
         photoDataUrl: prof?.photoDataUrl,
-        password: user.password,
+        password: this.toHashedPassword(user.password),
       };
       this.pendingTeachers.set(pending.id!, pending);
     }
@@ -829,7 +875,6 @@ export class MemStorage implements IStorage {
         status: 'approved',
         username: u.username,
         role,
-        password: u.password,
         name: profile.name,
         email: profile.email,
         schoolId: profile.schoolId,
@@ -844,10 +889,16 @@ export class MemStorage implements IStorage {
     }
     // Pending students
     const ps = Array.from(this.pendingStudents.values()).find(a => a.username === username);
-    if (ps) return { status: 'pending', role: 'student', ...ps };
+    if (ps) {
+      const { password, ...rest } = ps as any;
+      return { status: 'pending', role: 'student', ...rest };
+    }
     // Pending teachers
     const pt = Array.from(this.pendingTeachers.values()).find(a => a.username === username);
-    if (pt) return { status: 'pending', role: 'teacher', ...pt };
+    if (pt) {
+      const { password, ...rest } = pt as any;
+      return { status: 'pending', role: 'teacher', ...rest };
+    }
     return { status: 'none', username };
   }
 
@@ -1467,7 +1518,7 @@ export class MemStorage implements IStorage {
     const available = await this.isUsernameAvailable(uname);
     if (!available) return { ok: false as const, error: 'Username taken' };
     const id = randomUUID();
-    this.users.set(id, { id, username: uname, password: input.password });
+    this.users.set(id, { id, username: uname, password: this.toHashedPassword(input.password) });
     this.roles.set(id, 'admin');
     this.profiles.set(id, { name: input.name || '', email: input.email || '', role: 'admin' });
     this.save();
