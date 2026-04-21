@@ -23,7 +23,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   const AUTH_COOKIE = 'ev_token';
   const cwd = typeof process.cwd === "function" ? process.cwd() : "";
-  const projectRoot = cwd && cwd.length > 0 ? cwd : path.resolve(getUploadsDir(), "..");
+  const projectRoot = process.cwd();
   if (!cwd) {
     console.warn("process.cwd() unavailable, falling back to derived project root for static paths.");
   }
