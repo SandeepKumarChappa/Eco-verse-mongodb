@@ -1,10 +1,12 @@
-import 'dotenv/config';
+import dotenv from "dotenv";
 import express, { type Request, Response, NextFunction } from "express";
 import helmet from "helmet";
 import morgan from "morgan";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 import { ensureUploadsDir } from "./uploads";
+
+dotenv.config();
 
 process.env.NODE_ENV = process.env.NODE_ENV || "production";
 process.env.PORT = process.env.PORT || "5000";
