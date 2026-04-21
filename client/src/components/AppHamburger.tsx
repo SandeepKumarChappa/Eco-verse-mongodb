@@ -1,6 +1,6 @@
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger, SheetClose } from "@/components/ui/sheet";
-import { Menu, Eye } from "lucide-react";
+import { Menu, Eye, Home as HomeIcon } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import { useAuth } from "@/lib/auth";
 import { useState, useRef } from "react";
@@ -21,6 +21,18 @@ export function AppHamburger() {
       isActive
         ? "bg-emerald-500/20 text-emerald-100 ring-1 ring-emerald-400/40 shadow-[0_8px_20px_-12px_rgba(16,185,129,0.8)]"
         : "bg-white/5 text-white/90 hover:bg-white/10 hover:translate-x-1 hover:shadow-[0_10px_24px_-16px_rgba(0,0,0,0.8)]",
+    ].join(" ");
+  };
+
+  const homeNavItemClass = () => {
+    const isActive = location === "/";
+    return [
+      "group flex items-center justify-between gap-3 rounded-xl px-4 py-3 text-sm font-semibold",
+      "mb-2 border border-white/10 shadow-[0_12px_28px_-18px_rgba(0,0,0,0.65)]",
+      "transition-all duration-300 ease-out",
+      isActive
+        ? "bg-emerald-500/22 text-emerald-100 ring-1 ring-emerald-400/35"
+        : "bg-white/8 text-white/95 hover:bg-[linear-gradient(135deg,rgba(16,185,129,0.35),rgba(34,211,238,0.22))] hover:translate-x-1 hover:shadow-[0_16px_32px_-14px_rgba(16,185,129,0.55)] hover:border-emerald-300/30",
     ].join(" ");
   };
 
@@ -62,14 +74,22 @@ export function AppHamburger() {
   return (
     <Sheet onOpenChange={setIsOpen}>
       {!isOpen && (
-        <SheetTrigger asChild>
-          <button
-            aria-label="Open menu"
-            className="w-9 h-9 rounded-lg bg-earth-orange/90 hover:bg-earth-orange-hover flex items-center justify-center shadow-orange transition-all duration-200 hover:scale-[1.03] pointer-events-auto"
-          >
-            <Menu className="h-5 w-5 text-white" />
-          </button>
-        </SheetTrigger>
+        <div className="flex items-center gap-3 pointer-events-auto">
+          <SheetTrigger asChild>
+            <button
+              aria-label="Open menu"
+              className="flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-white/8 text-white shadow-[0_12px_28px_-18px_rgba(0,0,0,0.65)] backdrop-blur-xl transition-all duration-300 ease-out hover:-translate-y-0.5 hover:scale-[1.08] hover:border-emerald-300/35 hover:bg-[linear-gradient(135deg,rgba(16,185,129,0.42),rgba(34,211,238,0.28))] hover:text-white hover:shadow-[0_18px_36px_-14px_rgba(16,185,129,0.65)] pointer-events-auto"
+            >
+              <Menu className="h-5 w-5 transition-transform duration-300 group-hover:rotate-90" />
+            </button>
+          </SheetTrigger>
+          <Button asChild variant="outline" className="hidden md:inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-white/8 p-0 text-white shadow-[0_12px_28px_-18px_rgba(0,0,0,0.65)] backdrop-blur-xl transition-all duration-300 ease-out hover:-translate-y-0.5 hover:scale-[1.08] hover:border-emerald-300/35 hover:bg-[linear-gradient(135deg,rgba(16,185,129,0.42),rgba(34,211,238,0.28))] hover:text-white hover:shadow-[0_18px_36px_-14px_rgba(16,185,129,0.65)]">
+            <Link href="/" aria-label="Home">
+              <HomeIcon className="h-4 w-4" />
+              <span className="sr-only">Home</span>
+            </Link>
+          </Button>
+        </div>
       )}
       <SheetContent side="left" className="bg-gradient-to-b from-slate-950 via-slate-900 to-slate-950 text-white border-r border-white/10 p-0">
         <div className="relative">
@@ -95,7 +115,7 @@ export function AppHamburger() {
         
         <nav className="mt-6 grid gap-2 px-6 pb-3 max-h-[calc(100vh-240px)] overflow-y-auto pr-4 scrollbar-thin scrollbar-thumb-white/10 scrollbar-track-transparent">
           <SheetClose asChild>
-            <Link href="/" className={navItemClass("/")}>Home</Link>
+            <Link href="/" className={homeNavItemClass()}>Home</Link>
           </SheetClose>
           {!role && (
             <>

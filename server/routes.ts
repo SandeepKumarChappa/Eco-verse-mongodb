@@ -132,10 +132,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     });
   });
 
-  // Serve embedded static games under a dedicated path to avoid colliding with SPA /games route
-  const gamesRoot = path.join(process.cwd(), 'public', 'games');
-  app.use('/embedded-games', express.static(gamesRoot));
-
   // Health check endpoint
   app.get('/api/health', (req, res) => {
     res.json({ status: 'ok', timestamp: new Date().toISOString() });
