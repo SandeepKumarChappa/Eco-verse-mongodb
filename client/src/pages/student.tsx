@@ -1,4 +1,5 @@
 import { useAuth } from "@/lib/auth";
+import { cachedFetch, clearCache } from "@/lib/apiCache";
 import { useEffect, useState, useRef, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -12,11 +13,17 @@ import { createPortal } from "react-dom";
 import { Link } from "wouter";
 import { motion, AnimatePresence } from "framer-motion";
 
-export default function StudentAppShell() {
+export default function StudentAppShell({ defaultView }: { defaultView?: 'overview' | 'profile' }) {
   const { role, username, clear } = useAuth();
-  const [currentView, setCurrentView] = useState<'overview' | 'profile'>('overview');
+  const [currentView, setCurrentView] = useState<'overview' | 'profile'>(defaultView || 'overview');
   const [profileSharing, setProfileSharing] = useState(false);
   const [shareableLink, setShareableLink] = useState("");
+
+  useEffect(() => {
+    if (defaultView) {
+      setCurrentView(defaultView);
+    }
+  }, [defaultView]);
 
   const user = {
     username: username,
@@ -55,63 +62,65 @@ export default function StudentAppShell() {
       </div>
 
       <div className="relative z-10 p-6 lg:p-8">
-        {/* Share Profile Link */}
-        <motion.div
-          initial={{ opacity: 0, y: -20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5 }}
-          className="mb-6"
-        >
-          <Button
-            onClick={() => setProfileSharing(!profileSharing)}
-            className="bg-gradient-to-r from-blue-500/20 to-cyan-500/20 hover:from-blue-500/30 hover:to-cyan-500/30 border border-blue-400/30 text-blue-300 hover:text-blue-200"
+        <div className="max-w-6xl mx-auto">
+          {/* Share Profile Link */}
+          <motion.div
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5 }}
+            className="mb-6"
           >
-            <Share2 className="w-4 h-4 mr-2" />
-            {profileSharing ? 'Hide Share Link' : 'Share Profile Link'}
-          </Button>
-          <p className="mt-2 text-xs text-white/60 max-w-xl">
-            This only shows the shareable URL. To let others open it, turn on the visibility switch in the Privacy section below.
-          </p>
-          
-          {profileSharing && shareableLink && (
-            <motion.div
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: 'auto' }}
-              exit={{ opacity: 0, height: 0 }}
-              transition={{ duration: 0.3 }}
-              className="mt-3 bg-white/10 backdrop-blur-xl border border-white/20 rounded-xl p-4"
+            <Button
+              onClick={() => setProfileSharing(!profileSharing)}
+              className="bg-gradient-to-r from-blue-500/20 to-cyan-500/20 hover:from-blue-500/30 hover:to-cyan-500/30 border border-blue-400/30 text-blue-300 hover:text-blue-200"
             >
-              <label className="text-white/70 text-sm block mb-2">Shareable Link</label>
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  value={shareableLink}
-                  readOnly
-                  className="flex-1 px-3 py-2 bg-white/10 border border-white/20 rounded-lg text-white text-sm"
-                />
-                <Button
-                  size="sm"
-                  onClick={copyToClipboard}
-                  className="bg-white/20 hover:bg-white/30 text-white border-white/30"
-                >
-                  <Copy className="w-4 h-4" />
-                </Button>
-              </div>
-              <p className="text-white/60 text-xs mt-2">
-                Others can view your progress and achievements using this link
-              </p>
-            </motion.div>
-          )}
-        </motion.div>
+              <Share2 className="w-4 h-4 mr-2" />
+              {profileSharing ? 'Hide Share Link' : 'Share Profile Link'}
+            </Button>
+            <p className="mt-2 text-xs text-white/60 max-w-xl">
+              This only shows the shareable URL. To let others open it, turn on the visibility switch in the Privacy section below.
+            </p>
+            
+            {profileSharing && shareableLink && (
+              <motion.div
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: 'auto' }}
+                exit={{ opacity: 0, height: 0 }}
+                transition={{ duration: 0.3 }}
+                className="mt-3 bg-white/10 backdrop-blur-xl border border-white/20 rounded-xl p-4"
+              >
+                <label className="text-white/70 text-sm block mb-2">Shareable Link</label>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={shareableLink}
+                    readOnly
+                    className="flex-1 px-3 py-2 bg-white/10 border border-white/20 rounded-lg text-white text-sm"
+                  />
+                  <Button
+                    size="sm"
+                    onClick={copyToClipboard}
+                    className="bg-white/20 hover:bg-white/30 text-white border-white/30"
+                  >
+                    <Copy className="w-4 h-4" />
+                  </Button>
+                </div>
+                <p className="text-white/60 text-xs mt-2">
+                  Others can view your progress and achievements using this link
+                </p>
+              </motion.div>
+            )}
+          </motion.div>
 
-        {/* Content Area */}
-        <AnimatePresence mode="wait">
-          {currentView === 'overview' ? (
-            <StudentOverview key="overview" username={username || ''} />
-          ) : (
-            <StudentProfile key="profile" username={username || ''} user={user} />
-          )}
-        </AnimatePresence>
+          {/* Content Area */}
+          <AnimatePresence mode="wait">
+            {currentView === 'overview' ? (
+              <StudentOverview key="overview" username={username || ''} />
+            ) : (
+              <StudentProfile key="profile" username={username || ''} user={user} />
+            )}
+          </AnimatePresence>
+        </div>
       </div>
     </div>
   );
@@ -123,15 +132,20 @@ function StudentOverview({ username }: { username: string }) {
   const [tasks, setTasks] = useState<any[]>([]);
   const [quizzes, setQuizzes] = useState<any[]>([]);
   const [saving, setSaving] = useState(false);
+  const profileLoadedFor = useRef<string>('');
 
   useEffect(() => {
+    if (!username) return;
+    if (profileLoadedFor.current === username) return;
+    profileLoadedFor.current = username;
+
     let mounted = true;
     (async () => {
       try {
-        const [p, t, q] = await Promise.all([
-          fetch('/api/student/profile', { headers: { 'X-Username': username } }).then(r => r.json()),
-          fetch('/api/student/tasks', { headers: { 'X-Username': username } }).then(r => r.json()),
-          fetch('/api/student/quizzes', { headers: { 'X-Username': username } }).then(r => r.json()),
+        const [p, t, q]: [any, any[], any[]] = await Promise.all([
+          cachedFetch<any>('/api/student/profile', { headers: { 'X-Username': username } }, 5 * 60 * 1000),
+          cachedFetch<any[]>('/api/student/tasks', { headers: { 'X-Username': username } }, 5 * 60 * 1000),
+          cachedFetch<any[]>('/api/student/quizzes', { headers: { 'X-Username': username } }, 5 * 60 * 1000),
         ]);
         if (!mounted) return;
         setProfile(p);
@@ -148,8 +162,10 @@ function StudentOverview({ username }: { username: string }) {
     if (!profile) return;
     setSaving(true);
     try {
+      const profileCacheKey = `/api/student/profile:${JSON.stringify({ headers: { 'X-Username': username || '' } })}`;
+      clearCache(profileCacheKey);
       await fetch('/api/student/profile/privacy', { method: 'PUT', headers: { 'Content-Type': 'application/json', 'X-Username': username || '' }, body: JSON.stringify({ allowExternalView: !profile.allowExternalView }) });
-      const p = await fetch('/api/student/profile', { headers: { 'X-Username': username || '' } }).then(r => r.json());
+      const p = await cachedFetch('/api/student/profile', { headers: { 'X-Username': username || '' } }, 5 * 60 * 1000);
       setProfile(p);
     } finally {
       setSaving(false);
@@ -168,10 +184,10 @@ function StudentOverview({ username }: { username: string }) {
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
       transition={{ duration: 0.5 }}
-      className="space-y-8"
+      className="space-y-6"
     >
       {/* Profile Visibility */}
-      <div className="rounded-2xl border border-white/20 bg-white/10 backdrop-blur-xl p-4 flex items-center justify-between gap-4">
+      <div className="rounded-2xl border border-white/20 bg-white/10 backdrop-blur-xl p-6 flex items-center justify-between gap-4">
         <div>
           <div className="text-sm text-white/70">Profile Visibility</div>
           <div className="text-lg font-semibold text-white">
@@ -755,15 +771,20 @@ function StudentProfileView() {
   const [schools, setSchools] = useState<Array<{ id: string; name: string }>>([]);
   const [saving, setSaving] = useState(false);
   const [celebrate, setCelebrate] = useState(false);
+  const profileLoadedFor = useRef<string>('');
 
   useEffect(() => {
+    if (!username) return;
+    if (profileLoadedFor.current === username) return;
+    profileLoadedFor.current = username;
+
     let mounted = true;
     (async () => {
       try {
-        const [p, m, s] = await Promise.all([
-          fetch('/api/student/profile', { headers: { 'X-Username': username || '' } }).then(r => r.json()),
-          fetch('/api/me/profile', { headers: { 'X-Username': username || '' } }).then(r => r.json()),
-          fetch('/api/schools').then(r => r.json()),
+        const [p, m, s]: [any, any, any[]] = await Promise.all([
+          cachedFetch<any>('/api/student/profile', { headers: { 'X-Username': username || '' } }, 5 * 60 * 1000),
+          cachedFetch<any>('/api/me/profile', { headers: { 'X-Username': username || '' } }, 5 * 60 * 1000),
+          cachedFetch<any[]>('/api/schools', undefined, 30 * 60 * 1000),
         ]);
         if (!mounted) return;
         setProfile(p);
@@ -784,8 +805,10 @@ function StudentProfileView() {
     if (!profile) return;
     setSaving(true);
     try {
+      const profileCacheKey = `/api/student/profile:${JSON.stringify({ headers: { 'X-Username': username || '' } })}`;
+      clearCache(profileCacheKey);
       await fetch('/api/student/profile/privacy', { method: 'PUT', headers: { 'Content-Type': 'application/json', 'X-Username': username || '' }, body: JSON.stringify({ allowExternalView: !profile.allowExternalView }) });
-      const p = await fetch('/api/student/profile', { headers: { 'X-Username': username || '' } }).then(r => r.json());
+      const p = await cachedFetch('/api/student/profile', { headers: { 'X-Username': username || '' } }, 5 * 60 * 1000);
       setProfile(p);
     } finally {
       setSaving(false);
@@ -893,7 +916,7 @@ function StudentProfileView() {
                   {profile.achievements?.map((a: any) => {
                     const emoji = a.key === 'first_task' ? '🥇' : a.key === 'top10_school' ? '🏅' : '🧠';
                     return (
-                      <div key={a.key} className="p-3 rounded-lg bg-slate-800/30 border border-white/10 flex items-center gap-3">
+                      <div key={a.key} className="p-3 rounded-lg bg-slate-800/30 border border-white/10 flex items-center gap-3 hover:shadow-lg transition duration-200">
                         <div className={`h-10 w-10 rounded-full flex items-center justify-center text-lg ${a.unlocked ? 'bg-emerald-500/40' : 'bg-slate-700/40'}`}>{emoji}</div>
                         <div>
                           <div className="font-medium text-white">{a.name}</div>
@@ -1000,8 +1023,8 @@ function StudentProfileEditor({ onClose }: { onClose: () => void }) {
     const run = async () => {
       try {
         const [p, s] = await Promise.all([
-          fetch('/api/me/profile', { headers: { 'X-Username': username || '' } }).then(r => r.json()),
-          fetch('/api/schools').then(r => r.json()),
+          cachedFetch<any>('/api/me/profile', { headers: { 'X-Username': username || '' } }, 5 * 60 * 1000),
+          cachedFetch<any[]>('/api/schools', undefined, 30 * 60 * 1000),
         ]);
         if (!mounted) return;
         setData(p || {});
@@ -1025,6 +1048,8 @@ function StudentProfileEditor({ onClose }: { onClose: () => void }) {
   const save = async () => {
     setSaving(true);
     try {
+      const cacheKey = `/api/me/profile:${JSON.stringify({ headers: { 'X-Username': username || '' } })}`;
+      clearCache(cacheKey);
       const res = await fetch('/api/me/profile', { method: 'PUT', headers: { 'Content-Type': 'application/json', 'X-Username': username || '' }, body: JSON.stringify({
         name: data.name || '',
         email: data.email || '',
@@ -1145,12 +1170,17 @@ function NotificationsBell() {
   const [unread, setUnread] = useState<number>(0);
   const buttonRef = useRef<HTMLButtonElement>(null);
   const [position, setPosition] = useState({ top: 0, right: 0 });
+  const profileLoadedFor = useRef<string>('');
   
   useEffect(() => {
+    if (!username) return;
+    if (profileLoadedFor.current === username) return;
+    profileLoadedFor.current = username;
+
     let mounted = true;
     (async () => {
       try {
-        const prof = await fetch('/api/student/profile', { headers: { 'X-Username': username || '' } }).then(r => r.json());
+        const prof = await cachedFetch<any>('/api/me/profile', { headers: { 'X-Username': username || '' } }, 5 * 60 * 1000);
         if (!mounted) return;
         setUnread(Number(prof?.unreadNotifications || 0));
       } catch {}

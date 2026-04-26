@@ -119,3 +119,33 @@ export function HeaderSkeleton() {
     </div>
   );
 }
+
+export function SubmissionCardSkeleton() {
+  return (
+    <div className="bg-white/10 border border-white/20 rounded-lg p-3">
+      <div className="flex items-start justify-between mb-2">
+        <Skeleton className="h-4 w-32" />
+        <Skeleton className="h-4 w-20" />
+      </div>
+      <Skeleton className="h-3 w-48" />
+    </div>
+  );
+}
+
+export function SubmissionListSkeleton() {
+  return (
+    <div className="space-y-3 max-h-96 overflow-y-auto">
+      {[...Array(3)].map((_, idx) => (
+        <SubmissionCardSkeleton key={idx} />
+      ))}
+    </div>
+  );
+}
+
+export function InlineLoadingSkeleton() {
+  return (
+    <div className="text-xs">
+      <Skeleton className="h-4 w-24" />
+    </div>
+  );
+}

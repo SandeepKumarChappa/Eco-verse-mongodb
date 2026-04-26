@@ -2,12 +2,13 @@ import { useAuth } from "@/lib/auth";
 import { useToast } from "@/hooks/use-toast";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { cachedFetch, clearCache, debounce } from "@/lib/apiCache";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { 
   LogOut, Settings, Users, CheckCircle, AlertCircle, Zap, Plus, Trash2, 
   Edit3, Eye, Shield, BarChart3, Gamepad2, BookOpen, Video, Globe, 
-  Megaphone, Clipboard, Youtube, Upload, RefreshCw, X
+  Megaphone, Clipboard, Youtube, Upload, RefreshCw, X, Download
 } from "lucide-react";
 function AdminGamesManager() {
   const { username } = useAuth();
@@ -262,6 +263,7 @@ function AdminGamesManager() {
                     <option value="climate" className="bg-gray-800 text-white">🌍 Climate</option>
                     <option value="habits" className="bg-gray-800 text-white">🏡 Habits</option>
                     <option value="wildlife" className="bg-gray-800 text-white">🌱 Plant & Wildlife</option>
+                    <option value="environment" className="bg-gray-800 text-white">🌿 Environment</option>
                     <option value="fun" className="bg-gray-800 text-white">🎲 Fun</option>
                   </select>
                 </div>
@@ -541,10 +543,12 @@ function AdminLearnManager() {
           <h2 className="text-xl font-semibold">Learn Modules & Lessons</h2>
           <p className="text-sm text-earth-muted mt-1">Edit or customize modules and lessons for the Learn section. All 17 core modules are available to edit.</p>
         </div>
-        <Button className="bg-earth-orange hover:bg-earth-orange-hover gap-2" onClick={openCreate}>
-          <Plus className="h-4 w-4" />
-          Create Module
-        </Button>
+        <div className="flex gap-2">
+          <Button className="bg-earth-orange hover:bg-earth-orange-hover gap-2" onClick={openCreate}>
+            <Plus className="h-4 w-4" />
+            Create Module
+          </Button>
+        </div>
       </div>
 
       <div className="p-4 rounded-2xl bg-[var(--earth-card)] border border-[var(--earth-border)] mb-4 shadow-sm">
@@ -748,6 +752,9 @@ export default function AdminPortal() {
       load();
       loadUsers();
       loadSchools();
+
+      const interval = setInterval(load, 10000);
+      return () => clearInterval(interval);
     }
   }, [isAdmin]);
 
@@ -759,6 +766,17 @@ export default function AdminPortal() {
     await fetch(`/api/admin/approve/${type}/${id}`, { method: 'POST' });
     await load();
     await loadUsers();
+  };
+
+  const handleReject = async (type: 'student' | 'teacher', id: string) => {
+    if (!confirm(`Reject this ${type} application? This cannot be undone.`)) return;
+    const endpoint = type === 'student' ? '/api/admin/reject-student' : '/api/admin/reject-teacher';
+    await fetch(endpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ applicationId: id }),
+    });
+    await load();
   };
 
   const approveAll = async () => {
@@ -828,14 +846,7 @@ export default function AdminPortal() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-emerald-950 to-slate-900 text-white relative overflow-hidden">
-      {/* Animated Background */}
-      <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute top-20 left-20 w-72 h-72 bg-emerald-500/10 rounded-full blur-3xl animate-pulse"></div>
-        <div className="absolute bottom-20 right-20 w-96 h-96 bg-cyan-500/10 rounded-full blur-3xl animate-pulse delay-1000"></div>
-        <div className="absolute top-1/2 left-1/2 w-80 h-80 bg-yellow-500/5 rounded-full blur-3xl animate-pulse delay-500"></div>
-      </div>
-
+    <div className="min-h-screen w-screen min-w-full overflow-x-hidden bg-slate-950 text-white relative overflow-hidden">
       <div className="relative z-10 p-4 lg:p-6 max-w-7xl mx-auto">
         {/* Header */}
         <div className="mb-6">
@@ -929,14 +940,24 @@ export default function AdminPortal() {
                             <p>ID: {s.studentId} | Roll: {s.rollNumber || '-'} | Class: {s.className || '-'}</p>
                             <p>School: {getSchoolName(s.schoolId)}</p>
                           </div>
-                          <Button 
-                            size="sm"
-                            onClick={() => approve('student', s.id)}
-                            className="w-full bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-400/30"
-                          >
-                            <CheckCircle className="w-4 h-4 mr-2" />
-                            Approve
-                          </Button>
+                          <div className="flex gap-2">
+                            <Button 
+                              size="sm"
+                              onClick={() => approve('student', s.id)}
+                              className="flex-1 bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-400/30"
+                            >
+                              <CheckCircle className="w-4 h-4 mr-2" />
+                              Approve
+                            </Button>
+                            <Button
+                              size="sm"
+                              onClick={() => handleReject('student', s.id)}
+                              className="flex-1 bg-red-500/20 hover:bg-red-500/30 text-red-300 border border-red-400/30"
+                            >
+                              <X className="w-4 h-4 mr-2" />
+                              Reject
+                            </Button>
+                          </div>
                         </div>
                       ))
                     )}
@@ -968,14 +989,24 @@ export default function AdminPortal() {
                             <p>Teacher ID: {t.teacherId} | Subject: {t.subject || '-'}</p>
                             <p>School: {getSchoolName(t.schoolId)}</p>
                           </div>
-                          <Button 
-                            size="sm"
-                            onClick={() => approve('teacher', t.id)}
-                            className="w-full bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-400/30"
-                          >
-                            <CheckCircle className="w-4 h-4 mr-2" />
-                            Approve
-                          </Button>
+                          <div className="flex gap-2">
+                            <Button
+                              size="sm"
+                              onClick={() => approve('teacher', t.id)}
+                              className="flex-1 bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-400/30"
+                            >
+                              <CheckCircle className="w-4 h-4 mr-2" />
+                              Approve
+                            </Button>
+                            <Button
+                              size="sm"
+                              onClick={() => handleReject('teacher', t.id)}
+                              className="flex-1 bg-red-500/20 hover:bg-red-500/30 text-red-300 border border-red-400/30"
+                            >
+                              <X className="w-4 h-4 mr-2" />
+                              Reject
+                            </Button>
+                          </div>
                         </div>
                       ))
                     )}
@@ -1069,19 +1100,19 @@ export default function AdminPortal() {
                 </div>
                 
                 {loadingDetails ? (
-                  <p className="text-white/50">LoadingGǪ</p>
+                  <p className="text-white/50">Loading…</p>
                 ) : (
                   <div className="space-y-2 max-h-[500px] overflow-y-auto">
                     {selectedUser.photoDataUrl && (
                       <img src={selectedUser.photoDataUrl} alt="Profile" className="h-24 w-24 object-cover rounded-full border-2 border-white/20 mb-4" />
                     )}
                     <p><span className="text-white/60">Status:</span> <Badge className="ml-2 bg-emerald-500/20 text-emerald-300">{selectedUser.status}</Badge></p>
-                    {selectedUser.name && <p><span className="text-white/60">Name:</span> <span className="text-white ml-2">{selectedUser.name}</span></p>}
-                    {selectedUser.email && <p><span className="text-white/60">Email:</span> <span className="text-white ml-2">{selectedUser.email}</span></p>}
+                    <p><span className="text-white/60">Name:</span> <span className="text-white ml-2">{selectedUser.name || 'Unknown'}</span></p>
+                    <p><span className="text-white/60">Email:</span> <span className="text-white ml-2">{selectedUser.email || 'Unknown'}</span></p>
                     {selectedUser.role && <p><span className="text-white/60">Role:</span> <span className="text-white ml-2">{selectedUser.role}</span></p>}
                     {selectedUser.studentId && <p><span className="text-white/60">Student ID:</span> <span className="text-white ml-2">{selectedUser.studentId}</span></p>}
                     {selectedUser.teacherId && <p><span className="text-white/60">Teacher ID:</span> <span className="text-white ml-2">{selectedUser.teacherId}</span></p>}
-                    {selectedUser.schoolId && <p><span className="text-white/60">School:</span> <span className="text-white ml-2">{getSchoolName(selectedUser.schoolId)}</span></p>}
+                    <p><span className="text-white/60">School:</span> <span className="text-white ml-2">{selectedUser.schoolName || getSchoolName(selectedUser.schoolId) || 'Unknown'}</span></p>
                     {selectedUser.subject && <p><span className="text-white/60">Subject:</span> <span className="text-white ml-2">{selectedUser.subject}</span></p>}
                     {selectedUser.rollNumber && <p><span className="text-white/60">Roll No:</span> <span className="text-white ml-2">{selectedUser.rollNumber}</span></p>}
                     {selectedUser.className && <p><span className="text-white/60">Class:</span> <span className="text-white ml-2">{selectedUser.className}</span></p>}
@@ -1112,7 +1143,17 @@ export default function AdminPortal() {
 }
 
 function SchoolsManager() {
-  const [schools, setSchools] = useState<Array<{ name: string; total: number; students: number; teachers: number; pending: number; approved: number }>>([]);
+  type SchoolBucket = {
+    id: string;
+    name: string;
+    total: number;
+    students: number;
+    teachers: number;
+    pending: number;
+    approved: number;
+  };
+
+  const [schools, setSchools] = useState<SchoolBucket[]>([]);
   const [loading, setLoading] = useState(false);
   
   // Check if value is a UUID format
@@ -1130,26 +1171,33 @@ function SchoolsManager() {
       const users = await usersRes.json().catch(() => [] as any[]);
       const schoolsList = await schoolsRes.json().catch(() => [] as any[]);
 
-      // Build UUID -> name map from schools table
+      // Build UUID -> name map from schools table and initialize buckets for all known schools
       const uuidToName = new Map<string, string>();
+      const buckets = new Map<string, SchoolBucket>();
       (Array.isArray(schoolsList) ? schoolsList : []).forEach((school: any) => {
         if (school.id && school.name) {
-          uuidToName.set(school.id.toLowerCase(), school.name);
+          const key = String(school.id).trim().toLowerCase();
+          const name = String(school.name).trim() || key;
+          uuidToName.set(key, name);
+          buckets.set(key, { id: key, name, total: 0, students: 0, teachers: 0, pending: 0, approved: 0 });
         }
       });
 
-      const buckets = new Map<string, { name: string; total: number; students: number; teachers: number; pending: number; approved: number }>();
-      const upsert = (rawName: string, kind: 'student' | 'teacher', status: 'pending' | 'approved') => {
-        let name = String(rawName || '').trim();
-        if (!name) return;
-        
-        // If it's a UUID, try to look up the actual school name
-        if (isUUID(name)) {
-          name = uuidToName.get(name.toLowerCase()) || name;
+      const upsert = (rawSchoolId: string, kind: 'student' | 'teacher', status: 'pending' | 'approved') => {
+        let value = String(rawSchoolId || '').trim();
+        if (!value) return;
+
+        let key = value.toLowerCase();
+        let name = value;
+
+        if (isUUID(value)) {
+          const lookup = uuidToName.get(key);
+          if (lookup) {
+            name = lookup;
+          }
         }
-        
-        const key = name.toLowerCase();
-        const current = buckets.get(key) || { name, total: 0, students: 0, teachers: 0, pending: 0, approved: 0 };
+
+        const current = buckets.get(key) || { id: key, name, total: 0, students: 0, teachers: 0, pending: 0, approved: 0 };
         current.total += 1;
         current[`${kind}s`] += 1;
         current[status] += 1;
@@ -1186,16 +1234,16 @@ function SchoolsManager() {
   return (
     <div>
       <div className="flex items-center justify-between gap-3 mb-3">
-        <h2 className="text-xl font-semibold">Schools & Colleges from Signups</h2>
+        <h2 className="text-xl font-semibold">Schools & Colleges from MongoDB</h2>
         <button onClick={load} disabled={loading} title="Refresh schools list" className="h-9 w-9 rounded-full border border-emerald-400/30 bg-emerald-400/10 flex items-center justify-center text-emerald-400 hover:bg-emerald-400/20 hover:border-emerald-400/50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
           <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
         </button>
       </div>
-      <p className="text-sm text-earth-muted mb-4">This list is built from the school/college values entered by students and teachers during signup.</p>
+      <p className="text-sm text-earth-muted mb-4">This list is based on the master school catalog in MongoDB and augmented with pending/approved signup counts.</p>
       <div className="space-y-2">
         {schools.length === 0 && <p className="text-earth-muted">No schools or colleges have been entered yet.</p>}
         {schools.map(s => (
-          <div key={s.name} className="p-3 rounded-xl bg-[var(--earth-card)] border border-[var(--earth-border)] transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg hover:border-emerald-300/30">
+          <div key={s.id} className="p-3 rounded-xl bg-[var(--earth-card)] border border-[var(--earth-border)] transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg hover:border-emerald-300/30">
             <div className="flex items-start justify-between gap-3">
               <div>
                 <div className="font-medium">{s.name}</div>
@@ -1457,7 +1505,7 @@ function GlobalQuizzes() {
           <div className="space-y-2">
             {list.length === 0 && <p className="text-sm text-earth-muted">No global quizzes yet.</p>}
             {list.map(q => (
-              <div key={q.id} className="p-3 rounded-lg bg-[var(--earth-card)] border border-[var(--earth-border)]">
+              <div key={q.id} className="p-3 rounded-lg bg-[var(--earth-card)] border border-[var(--earth-border)] hover:shadow-lg transition duration-200">
                 <div className="font-medium">{q.title} <span className="text-xs text-earth-muted">| {q.points} pts | {q.questions?.length||0} Qs</span></div>
                 {q.description && <div className="text-sm text-earth-muted">{q.description}</div>}
               </div>
@@ -1648,7 +1696,7 @@ function GlobalAnnouncements() {
     const res = await fetch(editingId ? `/api/admin/announcements/${encodeURIComponent(editingId)}` : '/api/admin/announcements', {
       method: editingId ? 'PUT' : 'POST',
       headers: { 'Content-Type': 'application/json', 'X-Username': username || '' },
-      body: JSON.stringify({ title, body })
+      body: JSON.stringify({ title, body, schoolId: 'global' })
     });
     if (!res.ok) {
       const e = await res.json().catch(()=>({} as any));
@@ -1746,14 +1794,15 @@ function GlobalAssignments() {
   const [saving, setSaving] = useState(false);
   const [removingId, setRemovingId] = useState<string | null>(null);
   const load = async () => {
-    const data = await fetch('/api/admin/assignments', { headers: { 'X-Username': username || '' } }).then(r => r.json());
+    const data = await cachedFetch<any[]>('/api/admin/assignments', { headers: { 'X-Username': username || '' } }, 5 * 60 * 1000);
     setList(Array.isArray(data) ? data : []);
   };
 
   const fetchSubs = async (assignmentId?: string) => {
-    const url = assignmentId ? `/api/admin/assignment-submissions?assignmentId=${encodeURIComponent(assignmentId)}` : '/api/admin/assignment-submissions';
-    const data = await fetch(url, { headers: { 'X-Username': username || '' } }).then(r => r.json());
-    return Array.isArray(data) ? data : [];
+    const url = assignmentId ? `/api/admin/assignment-submissions?assignmentId=${encodeURIComponent(assignmentId)}&limit=100` : '/api/admin/assignment-submissions?limit=1000';
+    const response = await cachedFetch<any>( url, { headers: { 'X-Username': username || '' } }, 2 * 60 * 1000);
+    // Handle paginated response format
+    return (response && response.data) ? response.data : (Array.isArray(response) ? response : []);
   };
 
   const refreshAssignmentSummary = async () => {
@@ -1778,6 +1827,8 @@ function GlobalAssignments() {
       setSubsLoading(false);
     }
   };
+
+  const [reviewingSubmissionId, setReviewingSubmissionId] = useState<string | null>(null);
 
   useEffect(() => {
     load();
@@ -1842,17 +1893,22 @@ function GlobalAssignments() {
   const review = async (id: string, status: 'approved' | 'rejected', points?: number) => {
     const body: any = { status };
     if (typeof points !== 'undefined') body.points = points;
-    const res = await fetch(`/api/admin/assignment-submissions/${encodeURIComponent(id)}/review`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-Username': username || '' },
-      body: JSON.stringify(body)
-    });
-    if (!res.ok) {
-      const e = await res.json().catch(() => ({} as any));
-      return alert(e?.error || 'Failed to review');
+    setReviewingSubmissionId(id);
+    try {
+      const res = await fetch(`/api/admin/assignment-submissions/${encodeURIComponent(id)}/review`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Username': username || '' },
+        body: JSON.stringify(body)
+      });
+      if (!res.ok) {
+        const e = await res.json().catch(() => ({} as any));
+        return alert(e?.error || 'Failed to review');
+      }
+      await loadSubs(activeAssignmentId || undefined);
+      await refreshAssignmentSummary();
+    } finally {
+      setReviewingSubmissionId(null);
     }
-    await loadSubs(activeAssignmentId || undefined);
-    await refreshAssignmentSummary();
   };
 
   return (
@@ -1961,7 +2017,7 @@ function GlobalAssignments() {
         ) : (
           <div className="space-y-3 max-h-96 overflow-y-auto pr-1">
             {subs.map((s) => (
-              <AdminAssignmentSubmissionCard key={s.id} s={s} onReview={review} />
+              <AdminAssignmentSubmissionCard key={s.id} s={s} onReview={review} isReviewing={reviewingSubmissionId === s.id} />
             ))}
           </div>
         )}
@@ -1970,18 +2026,32 @@ function GlobalAssignments() {
   );
 }
 
-function AdminAssignmentSubmissionCard({ s, onReview }: { s: any; onReview: (id: string, status: 'approved' | 'rejected', points?: number) => Promise<void> }) {
+function AdminAssignmentSubmissionCard({ s, onReview, isReviewing }: { s: any; onReview: (id: string, status: 'approved' | 'rejected', points?: number) => Promise<void>; isReviewing: boolean }) {
   const [points, setPoints] = useState<number>(() => {
     const current = Number(s.points);
     return Number.isFinite(current) ? current : 0;
   });
+  const [reviewLoading, setReviewLoading] = useState(false);
+  const [reviewingStatus, setReviewingStatus] = useState<'approved' | 'rejected' | null>(null);
   const maxPts = Number(s.assignmentMaxPoints || 10);
   const approved = s.status === 'approved';
   const rejected = s.status === 'rejected';
   const submitted = s.status === 'submitted';
+  const isDisabled = isReviewing || reviewLoading;
+
+  const handleReview = async (status: 'approved' | 'rejected') => {
+    setReviewLoading(true);
+    setReviewingStatus(status);
+    try {
+      await onReview(s.id, status, status === 'approved' ? points : undefined);
+    } finally {
+      setReviewLoading(false);
+      setReviewingStatus(null);
+    }
+  };
 
   return (
-    <div className="bg-white/5 border border-white/10 rounded-xl p-4">
+    <div className={`bg-white/5 border border-white/10 rounded-xl p-4 transition-opacity ${isDisabled ? 'opacity-60 pointer-events-none' : ''}`}>
       <div className="flex items-start justify-between gap-4 mb-3">
         <div className="text-sm flex-1 min-w-0">
           <div className="font-medium break-words">@{s.studentUsername} {s.studentName && <span className="text-earth-muted">• {s.studentName}</span>}</div>
@@ -2008,20 +2078,37 @@ function AdminAssignmentSubmissionCard({ s, onReview }: { s: any; onReview: (id:
             <div className="flex items-center gap-2">
               <label className="text-sm text-earth-muted">Points:</label>
               <input
-                className="w-16 rounded-lg px-2 py-1 bg-white/10 border border-white/20 text-sm"
+                className="w-16 rounded-lg px-2 py-1 bg-white/10 border border-white/20 text-sm disabled:opacity-50"
                 type="number"
                 min={0}
                 max={maxPts}
                 value={points}
                 onChange={e => setPoints(Number(e.target.value))}
+                disabled={isDisabled}
               />
               <span className="text-xs text-earth-muted">/ {maxPts}</span>
             </div>
-            <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700" onClick={() => onReview(s.id, 'approved', points)}>
-              Approve
+            <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50" disabled={isDisabled} onClick={() => handleReview('approved')}>
+              {reviewLoading && reviewingStatus === 'approved' ? (
+                <span className="flex items-center gap-1">
+                  <svg className="h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                  Approving...
+                </span>
+              ) : 'Approve'}
             </Button>
-            <Button size="sm" className="bg-red-600 hover:bg-red-700" onClick={() => onReview(s.id, 'rejected')}>
-              Reject
+            <Button size="sm" className="bg-red-600 hover:bg-red-700 disabled:opacity-50" disabled={isDisabled} onClick={() => handleReview('rejected')}>
+              {reviewLoading && reviewingStatus === 'rejected' ? (
+                <span className="flex items-center gap-1">
+                  <svg className="h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                  Rejecting...
+                </span>
+              ) : 'Reject'}
             </Button>
           </>
         )}
@@ -2058,13 +2145,8 @@ function AdminVideosManager() {
 
   const loadVideos = async () => {
     try {
-      const response = await fetch('/api/admin/videos', {
-        headers: { 'X-Username': username || '' }
-      });
-      if (response.ok) {
-        const data = await response.json();
-        setVideos(Array.isArray(data) ? data : []);
-      }
+      const data = await cachedFetch<any[]>('/api/admin/videos', { headers: { 'X-Username': username || '' } }, 5 * 60 * 1000);
+      setVideos(Array.isArray(data) ? data : []);
     } catch (error) {
       console.error('Failed to load videos:', error);
     }
@@ -2120,16 +2202,14 @@ function AdminVideosManager() {
     try {
       let duration: number | undefined;
       try {
-        const metaRes = await fetch('/api/videos/youtube-metadata', {
+        const metaResults = await cachedFetch<any[]>('/api/videos/youtube-metadata-batch', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'X-Username': username || '' },
-          body: JSON.stringify({ url: form.youtubeUrl.trim() })
-        });
-        if (metaRes.ok) {
-          const meta = await metaRes.json();
-          const parsed = Number(meta?.duration);
-          if (Number.isFinite(parsed) && parsed > 0) duration = parsed;
-        }
+          body: JSON.stringify({ urls: [form.youtubeUrl.trim()] })
+        }, 60 * 60 * 1000);
+        const meta = Array.isArray(metaResults) ? metaResults[0] : null;
+        const parsed = Number(meta?.duration);
+        if (Number.isFinite(parsed) && parsed > 0) duration = parsed;
       } catch {
         // Keep upload resilient even if metadata lookup fails.
       }

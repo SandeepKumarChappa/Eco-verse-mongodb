@@ -21,6 +21,7 @@ import { useAuth } from "@/lib/auth";
 import { Globe3D } from "@/components/Globe3D";
 import { TopicCards } from "@/components/TopicCards";
 import { SocialSidebar } from "@/components/SocialSidebar";
+import { ContinueLearningCard } from "@/components/ContinueLearningCard";
 import { Button } from "@/components/ui/button";
 import { ParticleBackground, ParticlePresets } from "@/components/ParticleBackground";
 import { BackToTop } from "@/components/BackToTop";
@@ -1068,6 +1069,25 @@ export default function Home() {
           <ChevronDown className="w-6 h-6 text-white" />
         </motion.div>
       </section>
+
+      {/* Continue Learning Section - Only for authenticated users */}
+      {role && (
+        <section className="relative py-20 px-6 bg-gradient-to-b from-slate-950 via-slate-900 to-slate-950">
+          <div className="absolute inset-0 overflow-hidden pointer-events-none">
+            <div className="absolute top-1/4 right-1/4 w-96 h-96 bg-emerald-500/10 rounded-full blur-3xl animate-pulse"></div>
+          </div>
+
+          <motion.div
+            initial={{ opacity: 0, y: 30 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.8 }}
+            viewport={{ once: true }}
+            className="max-w-3xl mx-auto relative z-10"
+          >
+            <ContinueLearningCard />
+          </motion.div>
+        </section>
+      )}
 
       {/* Chapters */}
       <div className="relative">

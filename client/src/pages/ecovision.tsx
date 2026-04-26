@@ -293,17 +293,17 @@ Provide a comprehensive, educational response focusing on environmental science.
                 transition={{ delay: 0.4 }}
                 className="grid grid-cols-1 md:grid-cols-3 gap-4"
               >
-                <div className="bg-white rounded-xl p-6 shadow-lg border-l-4 border-emerald-500">
+                <div className="bg-white rounded-xl p-6 shadow-lg border-l-4 border-emerald-500 hover:shadow-lg transition duration-200">
                   <div className="text-3xl mb-3">♻️</div>
                   <h3 className="font-bold text-emerald-900 mb-2">Material Composition</h3>
                   <p className="text-sm text-gray-600">Learn what materials make up everyday objects</p>
                 </div>
-                <div className="bg-white rounded-xl p-6 shadow-lg border-l-4 border-teal-500">
+                <div className="bg-white rounded-xl p-6 shadow-lg border-l-4 border-teal-500 hover:shadow-lg transition duration-200">
                   <div className="text-3xl mb-3">🌱</div>
                   <h3 className="font-bold text-teal-900 mb-2">Environmental Impact</h3>
                   <p className="text-sm text-gray-600">Understand decomposition and ecosystem effects</p>
                 </div>
-                <div className="bg-white rounded-xl p-6 shadow-lg border-l-4 border-cyan-500">
+                <div className="bg-white rounded-xl p-6 shadow-lg border-l-4 border-cyan-500 hover:shadow-lg transition duration-200">
                   <div className="text-3xl mb-3">💡</div>
                   <h3 className="font-bold text-cyan-900 mb-2">Eco Actions</h3>
                   <p className="text-sm text-gray-600">Get practical steps to reduce environmental impact</p>

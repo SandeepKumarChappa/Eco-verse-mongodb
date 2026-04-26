@@ -1,10 +1,13 @@
 import { useAuth } from "@/lib/auth";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription, DialogFooter } from "@/components/ui/dialog";
+import { cachedFetch } from "@/lib/apiCache";
 import { Upload, Youtube, Video, Plus, Trash2, Edit3, Bell, BarChart3, Users, FileText, BookOpen, Brain, Zap, LogOut } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
+import { SubmissionListSkeleton } from "@/components/SkeletonLoaders";
+import toast from "react-hot-toast";
 
 const tabs = ["Overview", "Tasks", "Quizzes", "Assignments", "Videos", "Students", "Announcements", "Profile"];
 
@@ -57,62 +60,64 @@ export default function TeacherAppShell() {
       </div>
 
       <div className="relative z-10 p-6 lg:p-8 min-h-screen flex flex-col">
-        <motion.div
-          initial={{ opacity: 0, y: -20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5 }}
-          className="mb-8"
-        >
-          <div className="flex items-center justify-between mb-6">
-            <div>
-              <h1 className="text-4xl font-bold bg-gradient-to-r from-purple-300 via-blue-300 to-pink-300 bg-clip-text text-transparent mb-2">
-                Teacher Dashboard
-              </h1>
-              <p className="text-white/70">Welcome, @{username}! Manage your courses and students</p>
-            </div>
-            <Button
-              onClick={clear}
-              size="sm"
-              className="bg-gradient-to-r from-red-500/20 to-red-600/20 hover:from-red-500/30 hover:to-red-600/30 border border-red-400/30 text-red-300"
-            >
-              <LogOut className="w-4 h-4 mr-2" />
-              Logout
-            </Button>
-          </div>
-
-          <div className="flex flex-wrap gap-2 pb-4">
-            {tabs.map((t, i) => (
-              <motion.button
-                key={t}
-                onClick={() => setTab(i)}
-                initial={{ opacity: 0, scale: 0.9 }}
-                animate={{ opacity: 1, scale: 1 }}
-                transition={{ duration: 0.2, delay: i * 0.05 }}
-                className={`px-4 py-2 rounded-xl font-medium text-sm transition-all ${
-                  tab === i
-                    ? 'bg-gradient-to-r from-purple-500/30 to-blue-500/30 border border-purple-400/50 text-white shadow-lg shadow-purple-500/20'
-                    : 'bg-white/10 border border-white/20 text-white/70 hover:bg-white/15'
-                }`}
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
+        <div className="max-w-6xl mx-auto flex-1 flex flex-col">
+          <motion.div
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5 }}
+            className="mb-8"
+          >
+            <div className="flex items-center justify-between mb-6">
+              <div>
+                <h1 className="text-4xl font-bold bg-gradient-to-r from-purple-300 via-blue-300 to-pink-300 bg-clip-text text-transparent mb-2">
+                  Teacher Dashboard
+                </h1>
+                <p className="text-white/70">Welcome, @{username}! Manage your courses and students</p>
+              </div>
+              <Button
+                onClick={clear}
+                size="sm"
+                className="bg-gradient-to-r from-red-500/20 to-red-600/20 hover:from-red-500/30 hover:to-red-600/30 border border-red-400/30 text-red-300"
               >
-                {t}
-              </motion.button>
-            ))}
-          </div>
-        </motion.div>
+                <LogOut className="w-4 h-4 mr-2" />
+                Logout
+              </Button>
+            </div>
 
-        <div className="flex-1 overflow-y-auto">
-          <AnimatePresence mode="wait">
-            {tab === 0 && <TeacherOverview key="overview" />}
-            {tab === 1 && <TeacherTasks key="tasks" />}
-            {tab === 2 && <TeacherQuizzes key="quizzes" />}
-            {tab === 3 && <TeacherAssignments key="assignments" />}
-            {tab === 4 && <TeacherVideosManager key="videos" />}
-            {tab === 5 && <TeacherStudents key="students" />}
-            {tab === 6 && <TeacherAnnouncements key="announcements" />}
-            {tab === 7 && <TeacherProfile key="profile" />}
-          </AnimatePresence>
+            <div className="flex flex-wrap gap-2 pb-4">
+              {tabs.map((t, i) => (
+                <motion.button
+                  key={t}
+                  onClick={() => setTab(i)}
+                  initial={{ opacity: 0, scale: 0.9 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  transition={{ duration: 0.2, delay: i * 0.05 }}
+                  className={`px-4 py-2 rounded-xl font-medium text-sm transition-all ${
+                    tab === i
+                      ? 'bg-gradient-to-r from-purple-500/30 to-blue-500/30 border border-purple-400/50 text-white shadow-lg shadow-purple-500/20'
+                      : 'bg-white/10 border border-white/20 text-white/70 hover:bg-white/15'
+                  }`}
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                >
+                  {t}
+                </motion.button>
+              ))}
+            </div>
+          </motion.div>
+
+          <div className="flex-1 overflow-y-auto">
+            <AnimatePresence mode="wait">
+              {tab === 0 && <TeacherOverview key="overview" />}
+              {tab === 1 && <TeacherTasks key="tasks" />}
+              {tab === 2 && <TeacherQuizzes key="quizzes" />}
+              {tab === 3 && <TeacherAssignments key="assignments" />}
+              {tab === 4 && <TeacherVideosManager key="videos" />}
+              {tab === 5 && <TeacherStudents key="students" />}
+              {tab === 6 && <TeacherAnnouncements key="announcements" />}
+              {tab === 7 && <TeacherProfile key="profile" />}
+            </AnimatePresence>
+          </div>
         </div>
       </div>
     </div>
@@ -145,14 +150,18 @@ function TeacherOverview() {
       }
     };
 
-    Promise.all([
-      fetch('/api/teacher/overview', { headers: { 'X-Username': username || '' } }).then(r => r.json()),
-      loadVideosCount(),
-    ]).then(([overview, videosCount]) => {
-      if (!mounted) return;
-      setData({ ...overview, videos: Number.isFinite(videosCount) ? videosCount : 0 });
-    });
-    return () => { mounted = false; };
+    const loadData = async () => {
+        const [overview, videosCount] = await Promise.all([
+          fetch('/api/teacher/overview', { headers: { 'X-Username': username || '' } }).then(r => r.json()),
+          loadVideosCount(),
+        ]);
+        if (!mounted) return;
+        setData({ ...overview, videos: Number.isFinite(videosCount) ? videosCount : 0 });
+    };
+
+    loadData();
+    const interval = setInterval(loadData, 10000);
+    return () => { mounted = false; clearInterval(interval); };
   }, [username]);
 
   return (
@@ -223,44 +232,47 @@ function TeacherTasks() {
   const [subsLoading, setSubsLoading] = useState(false);
 
   const load = async () => {
-    const list = await fetch('/api/teacher/tasks', { headers: { 'X-Username': username || '' } }).then(r => r.json());
+    const list = await cachedFetch<any[]>('/api/teacher/tasks', { headers: { 'X-Username': username || '' } }, 10 * 1000);
     setTasks(Array.isArray(list) ? list : []);
   };
 
   const fetchSubs = async (taskId?: string) => {
-    const url = taskId ? `/api/teacher/submissions?taskId=${encodeURIComponent(taskId)}` : '/api/teacher/submissions';
-    const list = await fetch(url, { headers: { 'X-Username': username || '' } }).then(r => r.json());
-    return Array.isArray(list) ? list : [];
+    const url = taskId
+      ? `/api/teacher/submissions?taskId=${encodeURIComponent(taskId)}&limit=100`
+      : '/api/teacher/submissions?limit=1000';
+    const response = await cachedFetch<any>(url, { headers: { 'X-Username': username || '' } }, 10 * 1000);
+    return response && response.data ? response.data : (Array.isArray(response) ? response : []);
   };
 
-  const refreshTaskSummary = async () => {
-    const all = await fetchSubs();
-    const next: Record<string, { total: number; pending: number }> = {};
-    all.forEach((s: any) => {
-      const key = String(s.taskId || '');
-      if (!key) return;
-      if (!next[key]) next[key] = { total: 0, pending: 0 };
-      next[key].total += 1;
-      if (s.status === 'submitted') next[key].pending += 1;
-    });
-    setTaskSubmissionSummary(next);
-  };
-
-  const loadSubs = async (taskId?: string) => {
+  const updateTaskSubsAndSummary = async (taskId?: string) => {
     setSubsLoading(true);
     try {
-      const list = await fetchSubs(taskId);
-      setSubmissions(list);
+      const all = await fetchSubs(taskId);
+      setSubmissions(all);
+      if (!taskId) {
+        const next: Record<string, { total: number; pending: number }> = {};
+        all.forEach((s: any) => {
+          const key = String(s.taskId || '');
+          if (!key) return;
+          if (!next[key]) next[key] = { total: 0, pending: 0 };
+          next[key].total += 1;
+          if (s.status === 'submitted') next[key].pending += 1;
+        });
+        setTaskSubmissionSummary(next);
+      }
     } finally {
       setSubsLoading(false);
     }
   };
 
+  const initRef = useRef(false);
+
   useEffect(() => {
+    if (initRef.current) return;
+    initRef.current = true;
     load();
-    loadSubs();
-    refreshTaskSummary();
-  }, []);
+    updateTaskSubsAndSummary();
+  }, [username]);
 
   const create = async () => {
     if (!title.trim()) return;
@@ -278,13 +290,20 @@ function TeacherTasks() {
   const review = async (id: string, status: 'approved' | 'rejected', points?: number) => {
     const body: any = { status };
     if (typeof points !== 'undefined') body.points = points;
-    const res = await fetch(`/api/teacher/submissions/${encodeURIComponent(id)}/review`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Username': username || '' }, body: JSON.stringify(body) });
-    if (!res.ok) {
-      const e = await res.json().catch(() => ({} as any));
-      return alert(e?.error || 'Failed to review');
+    try {
+      const res = await fetch(`/api/teacher/submissions/${encodeURIComponent(id)}/review`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Username': username || '' }, body: JSON.stringify(body) });
+      if (!res.ok) {
+        const e = await res.json().catch(() => ({} as any));
+        const msg = e?.error || 'Failed to review';
+        toast.error(msg);
+        return;
+      }
+      const statusText = status === 'approved' ? `Approved ✅` : `Rejected ❌`;
+      toast.success(`Submission ${statusText}`);
+      await updateTaskSubsAndSummary(activeTaskId || undefined);
+    } catch (err: any) {
+      toast.error('Failed to review submission');
     }
-    await loadSubs(activeTaskId || undefined);
-    await refreshTaskSummary();
   };
 
   const seed = async () => {
@@ -356,7 +375,7 @@ function TeacherTasks() {
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ duration: 0.3, delay: idx * 0.05 }}
                 className="bg-white/10 border border-white/20 rounded-xl p-4 backdrop-blur-xl hover:bg-white/15 transition-all cursor-pointer"
-                onClick={() => { setActiveTaskId(t.id); setActiveTaskTitle(t.title); loadSubs(t.id); }}
+                onClick={() => { setActiveTaskId(t.id); setActiveTaskTitle(t.title); updateTaskSubsAndSummary(t.id); }}
               >
                 <div className="flex items-start justify-between gap-3 mb-2">
                   <h4 className="font-semibold text-white">{t.title}</h4>
@@ -392,13 +411,13 @@ function TeacherTasks() {
           className="bg-white/10 border border-white/20 rounded-2xl p-6 backdrop-blur-xl"
         >
           <div className="flex items-center justify-between mb-4">
-            <h3 className="text-xl font-bold text-white">Submissions for "{activeTaskTitle}"</h3>
-            <Button onClick={() => { setActiveTaskId(null); setActiveTaskTitle(""); loadSubs(); }} variant="secondary" size="sm">
+            <h3 className="text-xl font-bold text-white">Submissions for {activeTaskTitle ? `"${activeTaskTitle}"` : "All Tasks"}</h3>
+            <Button onClick={() => { setActiveTaskId(null); setActiveTaskTitle(""); updateTaskSubsAndSummary(); }} variant="secondary" size="sm">
               Show All
             </Button>
           </div>
           {subsLoading ? (
-            <p className="text-white/70">Loading...</p>
+            <SubmissionListSkeleton />
           ) : submissions.length === 0 ? (
             <p className="text-white/70">No submissions yet</p>
           ) : (
@@ -419,10 +438,23 @@ function SubmissionCard({ s, onReview }: { s: any; onReview: (id: string, status
     const current = Number(s.points);
     return Number.isFinite(current) ? current : 0;
   });
+  const [reviewLoading, setReviewLoading] = useState(false);
+  const [reviewingStatus, setReviewingStatus] = useState<'approved' | 'rejected' | null>(null);
   const maxPts = Number(s.taskMaxPoints || 10);
   const approved = s.status === 'approved';
   const rejected = s.status === 'rejected';
   const submitted = s.status === 'submitted';
+
+  const handleReview = async (status: 'approved' | 'rejected') => {
+    setReviewLoading(true);
+    setReviewingStatus(status);
+    try {
+      await onReview(s.id, status, status === 'approved' ? points : undefined);
+    } finally {
+      setReviewLoading(false);
+      setReviewingStatus(null);
+    }
+  };
 
   return (
     <motion.div
@@ -434,6 +466,7 @@ function SubmissionCard({ s, onReview }: { s: any; onReview: (id: string, status
       <div className="flex items-start justify-between gap-4 mb-3">
         <div className="text-sm flex-1">
           <div className="text-white font-medium">@{s.studentUsername} {s.studentName && <span className="text-white/70">• {s.studentName}</span>}</div>
+          {s.taskTitle && <div className="text-xs text-blue-400 mt-1 font-medium">{s.taskTitle}</div>}
           {(s.className || s.section) && (
             <div className="text-xs text-white/60 mt-1">Class: {s.className || '-'} • Section: {s.section || '-'}</div>
           )}
@@ -462,20 +495,37 @@ function SubmissionCard({ s, onReview }: { s: any; onReview: (id: string, status
             <div className="flex items-center gap-2">
               <label className="text-sm text-white/70">Points:</label>
               <input
-                className="w-16 rounded-lg px-2 py-1 bg-white/10 border border-white/20 text-white text-sm"
+                className="w-16 rounded-lg px-2 py-1 bg-white/10 border border-white/20 text-white text-sm disabled:opacity-50"
                 type="number"
                 min={0}
                 max={maxPts}
                 value={points}
                 onChange={e => setPoints(Number(e.target.value))}
+                disabled={reviewLoading}
               />
               <span className="text-xs text-white/70">/ {maxPts}</span>
             </div>
-            <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700" onClick={() => onReview(s.id, 'approved', points)}>
-              Approve
+            <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50" disabled={reviewLoading} onClick={() => handleReview('approved')}>
+              {reviewLoading && reviewingStatus === 'approved' ? (
+                <span className="flex items-center gap-1">
+                  <svg className="h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                  Processing...
+                </span>
+              ) : 'Approve'}
             </Button>
-            <Button size="sm" className="bg-red-600 hover:bg-red-700" onClick={() => onReview(s.id, 'rejected')}>
-              Reject
+            <Button size="sm" className="bg-red-600 hover:bg-red-700 disabled:opacity-50" disabled={reviewLoading} onClick={() => handleReview('rejected')}>
+              {reviewLoading && reviewingStatus === 'rejected' ? (
+                <span className="flex items-center gap-1">
+                  <svg className="h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                  Processing...
+                </span>
+              ) : 'Reject'}
             </Button>
           </>
         )}
@@ -672,76 +722,98 @@ function TeacherAssignments() {
   const [subsLoading, setSubsLoading] = useState(false);
   const [activeAssignmentId, setActiveAssignmentId] = useState<string | null>(null);
   const [activeAssignmentTitle, setActiveAssignmentTitle] = useState<string>('');
+  const [isReviewing, setIsReviewing] = useState(false);
+  const [isCreating, setIsCreating] = useState(false);
 
   const load = async () => {
-    const data = await fetch('/api/teacher/assignments', { headers: { 'X-Username': username || '' } }).then(r => r.json());
+    const data = await cachedFetch<any[]>('/api/teacher/assignments', { headers: { 'X-Username': username || '' } }, 10 * 1000);
     setList(Array.isArray(data) ? data : []);
   };
 
   const fetchSubs = async (assignmentId?: string) => {
-    const url = assignmentId ? `/api/teacher/assignment-submissions?assignmentId=${encodeURIComponent(assignmentId)}` : '/api/teacher/assignment-submissions';
-    const data = await fetch(url, { headers: { 'X-Username': username || '' } }).then(r => r.json());
-    return Array.isArray(data) ? data : [];
+    const url = assignmentId
+      ? `/api/teacher/assignment-submissions?assignmentId=${encodeURIComponent(assignmentId)}&limit=100`
+      : '/api/teacher/assignment-submissions?limit=1000';
+    const response = await cachedFetch<any>(url, { headers: { 'X-Username': username || '' } }, 10 * 1000);
+    return response && response.data ? response.data : (Array.isArray(response) ? response : []);
   };
 
-  const refreshAssignmentSummary = async () => {
-    const all = await fetchSubs();
-    const next: Record<string, { total: number; pending: number }> = {};
-    all.forEach((s: any) => {
-      const key = String(s.assignmentId || '');
-      if (!key) return;
-      if (!next[key]) next[key] = { total: 0, pending: 0 };
-      next[key].total += 1;
-      if (s.status === 'submitted') next[key].pending += 1;
-    });
-    setAssignmentSubmissionSummary(next);
-  };
-
-  const loadSubs = async (assignmentId?: string) => {
+  const updateSubsAndSummary = async (assignmentId?: string) => {
     setSubsLoading(true);
     try {
       const data = await fetchSubs(assignmentId);
       setSubs(data);
+      if (!assignmentId) {
+        const next: Record<string, { total: number; pending: number }> = {};
+        data.forEach((s: any) => {
+          const key = String(s.assignmentId || '');
+          if (!key) return;
+          if (!next[key]) next[key] = { total: 0, pending: 0 };
+          next[key].total += 1;
+          if (s.status === 'submitted') next[key].pending += 1;
+        });
+        setAssignmentSubmissionSummary(next);
+      }
     } finally {
       setSubsLoading(false);
     }
   };
 
+  const initRef = useRef(false);
+
   useEffect(() => {
+    if (initRef.current) return;
+    initRef.current = true;
     load();
-    loadSubs();
-    refreshAssignmentSummary();
-  }, []);
+    updateSubsAndSummary();
+  }, [username]);
 
   useEffect(() => {
     const id = window.setInterval(() => {
-      loadSubs(activeAssignmentId || undefined);
-      refreshAssignmentSummary();
+      updateSubsAndSummary(activeAssignmentId || undefined);
     }, 8000);
     return () => window.clearInterval(id);
   }, [activeAssignmentId, username]);
 
   const create = async () => {
-    if (!title.trim()) return;
-    const res = await fetch('/api/teacher/assignments', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Username': username || '' }, body: JSON.stringify({ title, description, deadline, maxPoints }) });
-    if (!res.ok) {
-      const e = await res.json().catch(() => ({} as any));
-      return alert(e?.error || 'Failed to create assignment');
+    if (!title.trim() || isCreating) return;
+    setIsCreating(true);
+    try {
+      const res = await fetch('/api/teacher/assignments', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Username': username || '' },
+        body: JSON.stringify({ title, description, deadline, maxPoints })
+      });
+      if (!res.ok) {
+        const e = await res.json().catch(() => ({} as any));
+        return alert(e?.error || 'Failed to create assignment');
+      }
+      setTitle(''); setDescription(''); setDeadline(''); setMaxPoints(10);
+      await load();
+    } finally {
+      setIsCreating(false);
     }
-    setTitle(''); setDescription(''); setDeadline(''); setMaxPoints(10);
-    await load();
   };
 
   const review = async (id: string, status: 'approved' | 'rejected', points?: number) => {
-    const body: any = { status };
-    if (typeof points !== 'undefined') body.points = points;
-    const res = await fetch(`/api/teacher/assignment-submissions/${encodeURIComponent(id)}/review`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Username': username || '' }, body: JSON.stringify(body) });
-    if (!res.ok) {
-      const e = await res.json().catch(() => ({} as any));
-      return alert(e?.error || 'Failed to review');
+    if (isReviewing) return;
+    setIsReviewing(true);
+    try {
+      const body: any = { status };
+      if (typeof points !== 'undefined') body.points = points;
+      const res = await fetch(`/api/teacher/assignment-submissions/${encodeURIComponent(id)}/review`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Username': username || '' },
+        body: JSON.stringify(body)
+      });
+      if (!res.ok) {
+        const e = await res.json().catch(() => ({} as any));
+        return alert(e?.error || 'Failed to review');
+      }
+      await updateSubsAndSummary(activeAssignmentId || undefined);
+    } finally {
+      setIsReviewing(false);
     }
-    await loadSubs(activeAssignmentId || undefined);
-    await refreshAssignmentSummary();
   };
 
   return (
@@ -786,7 +858,7 @@ function TeacherAssignments() {
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ duration: 0.3, delay: idx * 0.05 }}
                 className="bg-white/10 border border-white/20 rounded-xl p-4 backdrop-blur-xl cursor-pointer hover:bg-white/15 transition-all"
-                onClick={() => { setActiveAssignmentId(a.id); setActiveAssignmentTitle(a.title); loadSubs(a.id); }}
+                onClick={() => { setActiveAssignmentId(a.id); setActiveAssignmentTitle(a.title); updateSubsAndSummary(a.id); }}
               >
                 <div className="flex items-start justify-between gap-3 mb-2">
                   <h4 className="font-semibold text-white">{a.title}</h4>
@@ -822,13 +894,13 @@ function TeacherAssignments() {
           className="bg-white/10 border border-white/20 rounded-2xl p-6 backdrop-blur-xl"
         >
           <div className="flex items-center justify-between mb-4">
-            <h3 className="text-xl font-bold text-white">Submissions for "{activeAssignmentTitle}"</h3>
-            <Button onClick={() => { setActiveAssignmentId(null); setActiveAssignmentTitle(''); loadSubs(); }} variant="secondary" size="sm">
+            <h3 className="text-xl font-bold text-white">Submissions for {activeAssignmentTitle ? `"${activeAssignmentTitle}"` : 'All Assignments'}</h3>
+            <Button onClick={() => { setActiveAssignmentId(null); setActiveAssignmentTitle(''); updateSubsAndSummary(); }} variant="secondary" size="sm">
               Show All
             </Button>
           </div>
           {subsLoading ? (
-            <p className="text-white/70">Loading...</p>
+            <SubmissionListSkeleton />
           ) : subs.length === 0 ? (
             <p className="text-white/70">No submissions yet</p>
           ) : (
@@ -849,10 +921,23 @@ function AssignmentSubmissionCard({ s, onReview }: { s: any; onReview: (id: stri
     const current = Number(s.points);
     return Number.isFinite(current) ? current : 0;
   });
+  const [reviewLoading, setReviewLoading] = useState(false);
+  const [reviewingStatus, setReviewingStatus] = useState<'approved' | 'rejected' | null>(null);
   const maxPts = Number(s.assignmentMaxPoints || 10);
   const approved = s.status === 'approved';
   const rejected = s.status === 'rejected';
   const submitted = s.status === 'submitted';
+
+  const handleReview = async (status: 'approved' | 'rejected') => {
+    setReviewLoading(true);
+    setReviewingStatus(status);
+    try {
+      await onReview(s.id, status, status === 'approved' ? points : undefined);
+    } finally {
+      setReviewLoading(false);
+      setReviewingStatus(null);
+    }
+  };
 
   return (
     <motion.div
@@ -864,6 +949,11 @@ function AssignmentSubmissionCard({ s, onReview }: { s: any; onReview: (id: stri
       <div className="flex items-start justify-between gap-4 mb-3">
         <div className="text-sm flex-1">
           <div className="text-white font-medium">@{s.studentUsername} {s.studentName && <span className="text-white/70">• {s.studentName}</span>}</div>
+          {(s.assignmentTitle || s.assignmentId) && (
+            <div className="text-xs text-emerald-400 mt-1 font-medium">
+              {s.assignmentTitle || `Assignment ${s.assignmentId}`}
+            </div>
+          )}
           {(s.className || s.section) && (
             <div className="text-xs text-white/60 mt-1">Class: {s.className || '-'} • Section: {s.section || '-'}</div>
           )}
@@ -887,20 +977,37 @@ function AssignmentSubmissionCard({ s, onReview }: { s: any; onReview: (id: stri
             <div className="flex items-center gap-2">
               <label className="text-sm text-white/70">Points:</label>
               <input
-                className="w-16 rounded-lg px-2 py-1 bg-white/10 border border-white/20 text-white text-sm"
+                className="w-16 rounded-lg px-2 py-1 bg-white/10 border border-white/20 text-white text-sm disabled:opacity-50"
                 type="number"
                 min={0}
                 max={maxPts}
                 value={points}
                 onChange={e => setPoints(Number(e.target.value))}
+                disabled={reviewLoading}
               />
               <span className="text-xs text-white/70">/ {maxPts}</span>
             </div>
-            <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700" onClick={() => onReview(s.id, 'approved', points)}>
-              Approve
+            <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50" disabled={reviewLoading} onClick={() => handleReview('approved')}>
+              {reviewLoading && reviewingStatus === 'approved' ? (
+                <span className="flex items-center gap-1">
+                  <svg className="h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                  Processing...
+                </span>
+              ) : 'Approve'}
             </Button>
-            <Button size="sm" className="bg-red-600 hover:bg-red-700" onClick={() => onReview(s.id, 'rejected')}>
-              Reject
+            <Button size="sm" className="bg-red-600 hover:bg-red-700 disabled:opacity-50" disabled={reviewLoading} onClick={() => handleReview('rejected')}>
+              {reviewLoading && reviewingStatus === 'rejected' ? (
+                <span className="flex items-center gap-1">
+                  <svg className="h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                  Processing...
+                </span>
+              ) : 'Reject'}
             </Button>
           </>
         )}
@@ -933,11 +1040,8 @@ function TeacherVideosManager() {
 
   const loadVideos = async () => {
     try {
-      const response = await fetch(`/api/teacher/videos?teacherId=${username}`, { headers: { 'X-Username': username || '' } });
-      if (response.ok) {
-        const data = await response.json();
-        setVideos(Array.isArray(data) ? data : []);
-      }
+      const data = await cachedFetch<any[]>(`/api/teacher/videos?teacherId=${encodeURIComponent(username || '')}`, { headers: { 'X-Username': username || '' } }, 5 * 60 * 1000);
+      setVideos(Array.isArray(data) ? data : []);
     } catch (error) {
       console.error('Failed to load videos:', error);
     }
@@ -979,28 +1083,26 @@ function TeacherVideosManager() {
 
   const handleYouTubeUpload = async () => {
     if (!form.title.trim() || !form.youtubeUrl.trim()) {
-      alert('Title and YouTube URL are required');
+      toast.error('Title and YouTube URL are required');
       return;
     }
     const videoId = extractYouTubeVideoId(form.youtubeUrl);
     if (!videoId) {
-      alert('Please enter a valid YouTube URL');
+      toast.error('Please enter a valid YouTube URL');
       return;
     }
     setIsUploading(true);
     try {
       let duration: number | undefined;
       try {
-        const metaRes = await fetch('/api/videos/youtube-metadata', {
+        const metaResults = await cachedFetch<any[]>('/api/videos/youtube-metadata-batch', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'X-Username': username || '' },
-          body: JSON.stringify({ url: form.youtubeUrl.trim() })
-        });
-        if (metaRes.ok) {
-          const meta = await metaRes.json();
-          const parsed = Number(meta?.duration);
-          if (Number.isFinite(parsed) && parsed > 0) duration = parsed;
-        }
+          body: JSON.stringify({ urls: [form.youtubeUrl.trim()] })
+        }, 60 * 60 * 1000);
+        const meta = Array.isArray(metaResults) ? metaResults[0] : null;
+        const parsed = Number(meta?.duration);
+        if (Number.isFinite(parsed) && parsed > 0) duration = parsed;
       } catch {
         // Keep upload resilient even if metadata lookup fails.
       }
@@ -1023,17 +1125,17 @@ function TeacherVideosManager() {
         body: JSON.stringify(videoData)
       });
       if (response.ok) {
-        alert('YouTube video added successfully!');
+        toast.success('YouTube video added successfully! 🎉');
         resetForm();
         setIsUploadModalOpen(false);
         loadVideos();
       } else {
         const error = await response.json();
-        alert(error.error || 'Failed to add YouTube video');
+        toast.error(error.error || 'Failed to add YouTube video');
       }
     } catch (error) {
       console.error('Error uploading YouTube video:', error);
-      alert('Failed to add YouTube video');
+      toast.error('Failed to add YouTube video');
     } finally {
       setIsUploading(false);
     }
@@ -1041,7 +1143,7 @@ function TeacherVideosManager() {
 
   const handleFileUpload = async () => {
     if (!form.title.trim() || !videoFile) {
-      alert('Title and video file are required');
+      toast.error('Title and video file are required');
       return;
     }
     setIsUploading(true);
@@ -1063,17 +1165,17 @@ function TeacherVideosManager() {
         body: formData
       });
       if (response.ok) {
-        alert('Video file uploaded successfully!');
+        toast.success('Video file uploaded successfully! 🎉');
         resetForm();
         setIsUploadModalOpen(false);
         loadVideos();
       } else {
         const error = await response.json();
-        alert(error.error || 'Failed to upload video file');
+        toast.error(error.error || 'Failed to upload video file');
       }
     } catch (error) {
       console.error('Error uploading video file:', error);
-      alert('Failed to upload video file');
+      toast.error('Failed to upload video file');
     } finally {
       setIsUploading(false);
     }
@@ -1087,15 +1189,15 @@ function TeacherVideosManager() {
         headers: { 'X-Username': username || '' }
       });
       if (response.ok) {
-        alert('Video deleted successfully!');
+        toast.success('Video deleted successfully! 🗑️');
         loadVideos();
       } else {
         const error = await response.json();
-        alert(error.error || 'Failed to delete video');
+        toast.error(error.error || 'Failed to delete video');
       }
     } catch (error) {
       console.error('Error deleting video:', error);
-      alert('Failed to delete video');
+      toast.error('Failed to delete video');
     }
   };
 
@@ -1416,7 +1518,7 @@ function TeacherProfile() {
 
   const resolveSchoolName = (schoolId: string, schoolList: Array<{ id: string; name: string }>) => {
     const match = schoolList.find((s) => s.id === schoolId);
-    return match ? match.name : schoolId;
+    return match ? match.name : '';
   };
 
   useEffect(() => {

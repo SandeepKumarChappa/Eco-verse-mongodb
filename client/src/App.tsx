@@ -1,8 +1,8 @@
 import { Switch, Route, useLocation } from "wouter";
-import { Suspense, lazy } from "react";
+import { Suspense, lazy, useEffect } from "react";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
-import { Toaster } from "@/components/ui/toaster";
+import { Toaster } from "react-hot-toast";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider } from "@/lib/auth";
 import { ProtectedRoute, AdminOnlyRoute, StudentOrTeacherRoute } from "@/components/ProtectedRoute";
@@ -105,6 +105,15 @@ function Router() {
       </Route>
       
       {/* Role-specific app shells */}
+      <Route path="/student/profile">
+        {() => (
+          <PageTransition>
+            <ProtectedRoute allowedRoles={["student"]}>
+              <StudentAppShell defaultView="profile" />
+            </ProtectedRoute>
+          </PageTransition>
+        )}
+      </Route>
       <Route path="/student">
         {() => (
           <PageTransition>
@@ -225,6 +234,14 @@ function Router() {
         )}
       </Route>
       
+      <Route path="/profile">
+        {() => (
+          <PageTransition>
+            <RedirectToStudentProfile />
+          </PageTransition>
+        )}
+      </Route>
+
       {/* Public profile view - no authentication required */}
       <Route path="/profile/:profileId">
         {() => (
@@ -247,6 +264,16 @@ function Router() {
   );
 }
 
+function RedirectToStudentProfile() {
+  const [, navigate] = useLocation();
+
+  useEffect(() => {
+    navigate('/student/profile');
+  }, [navigate]);
+
+  return null;
+}
+
 function RouteFallback() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-emerald-950 via-slate-900 to-blue-950">
@@ -263,7 +290,39 @@ function App() {
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
         <TooltipProvider>
-          <Toaster />
+          <Toaster 
+            position="top-right"
+            reverseOrder={false}
+            toastOptions={{
+              duration: 4000,
+              style: {
+                background: '#1e293b',
+                color: '#fff',
+                border: '1px solid rgba(255, 255, 255, 0.1)',
+                borderRadius: '0.75rem',
+              },
+              success: {
+                style: {
+                  background: '#10b981',
+                  borderColor: '#059669',
+                },
+                iconTheme: {
+                  primary: '#fff',
+                  secondary: '#10b981',
+                }
+              },
+              error: {
+                style: {
+                  background: '#ef4444',
+                  borderColor: '#dc2626',
+                },
+                iconTheme: {
+                  primary: '#fff',
+                  secondary: '#ef4444',
+                }
+              },
+            }}
+          />
           {/* Custom Cursor with Eco Theme */}
           <CustomCursorProvider />
           {/* Global menu overlay available on all routes */}

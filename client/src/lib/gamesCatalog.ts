@@ -1,7 +1,7 @@
 export type GameDef = {
   id: string;
   name: string;
-  category: 'recycling' | 'climate' | 'habits' | 'wildlife' | 'fun';
+  category: 'recycling' | 'climate' | 'habits' | 'wildlife' | 'fun' | 'environment';
   description: string;
   difficulty: 'Easy' | 'Medium' | 'Hard';
   points: number;
@@ -15,6 +15,7 @@ export const GAME_CATEGORIES: Array<{ value: GameDef['category']; label: string 
   { value: 'climate', label: '🌍 Climate' },
   { value: 'habits', label: '🏡 Habits' },
   { value: 'wildlife', label: '🌱 Plant & Wildlife' },
+  { value: 'environment', label: '🌿 Environment' },
   { value: 'fun', label: '🎲 Fun' },
 ];
 
@@ -48,7 +49,7 @@ export const GAMES: GameDef[] = [
   { id: 'acquamind', name: 'AcquaMind', category: 'habits', description: 'Interactive water-awareness challenge focused on smarter use, conservation habits, and environmental impact.', difficulty: 'Medium', points: 95, icon: '💧', image: '/api/image/stunning-high-resolution-nature-and-landscape-backgrounds-breathtaking-scenery-in-hd-photo.jpg', externalUrl: 'https://acquamind.netlify.app/' },
 ];
 
-const ALLOWED_CATEGORIES = new Set<GameDef['category']>(['recycling', 'climate', 'habits', 'wildlife', 'fun']);
+const ALLOWED_CATEGORIES = new Set<GameDef['category']>(['recycling', 'climate', 'habits', 'wildlife', 'fun', 'environment']);
 
 export function normalizeGameRecord(raw: any): GameDef | null {
   const id = String(raw?.id || '').trim();

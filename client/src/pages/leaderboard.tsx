@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import SignupAnimatedBackground from "@/components/SignupAnimatedBackground";
 import { ArrowLeft, Crown, School, Search, Trophy, Users } from "lucide-react";
 import { useAuth } from "@/lib/auth";
+import { InlineLoadingSkeleton } from "@/components/SkeletonLoaders";
 
 // Define CSS animations
 const animationStyles = `
@@ -167,9 +168,48 @@ export default function LeaderboardPage() {
   // Derive schools for filter dropdown from loaded leaderboard schools
   useEffect(() => {
     if (Array.isArray(schools)) {
-      setSchoolsList(schools.map(s => ({ id: s.schoolId, name: s.schoolName })));
+      setSchoolsList(prev => {
+        const merged = new Map<string, string>(prev.map(s => [s.id, s.name]));
+        schools.forEach(s => {
+          const id = String(s.schoolId || '');
+          if (id) merged.set(id, String(s.schoolName || id));
+        });
+        return Array.from(merged.entries())
+          .map(([id, name]) => ({ id, name }))
+          .sort((a, b) => a.name.localeCompare(b.name));
+      });
     }
   }, [schools]);
+
+  // Load all schools for name resolution
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      try {
+        const res = await fetch('/api/schools');
+        if (!res.ok) throw new Error(`${res.status}`);
+        const allSchools = (await res.json()) as Array<{ id: string; name: string }>;
+        if (mounted) {
+          setSchoolsList(prev => {
+            const merged = new Map<string, string>();
+            prev.forEach(s => {
+              if (s.id) merged.set(s.id, s.name);
+            });
+            allSchools.forEach(s => {
+              const id = String(s.id || '');
+              if (id && !merged.has(id)) merged.set(id, String(s.name || id));
+            });
+            return Array.from(merged.entries())
+              .map(([id, name]) => ({ id, name }))
+              .sort((a, b) => a.name.localeCompare(b.name));
+          });
+        }
+      } catch (e: any) {
+        console.warn('Failed to load all schools:', e?.message);
+      }
+    })();
+    return () => { mounted = false; };
+  }, []);
 
   const loadStudents = async (school: SchoolRow) => {
     setSelectedSchool(school);
@@ -202,7 +242,7 @@ export default function LeaderboardPage() {
       <div className="absolute bottom-20 right-10 w-40 h-40 bg-blue-500/10 rounded-full blur-3xl animate-pulse" style={{animationDelay: '1s'}}></div>
       
       {/* Content */}
-      <div className="relative z-10">
+      <div className="relative z-10 max-w-6xl mx-auto p-6 lg:p-8">
         <div className="bg-white/5 backdrop-blur-2xl border border-white/20 shadow-2xl rounded-2xl p-8 mb-8 hover:bg-white/10 transition-all duration-300 group">
           <div className="flex items-center gap-3 mb-3">
             {selectedSchool && (
@@ -343,9 +383,16 @@ export default function LeaderboardPage() {
               <div className="divide-y divide-white/10">
                 {loadingTab && <div className="px-6 py-8 text-white/70 text-sm text-center"><div className="w-8 h-8 rounded-full border-2 border-white/30 border-t-white/90 animate-spin mx-auto"></div></div>}
                 {(!loadingTab && (globalStudents?.length ?? 0) === 0) && <div className="px-6 py-8 text-white/70 text-sm text-center">🔍 No students found.</div>}
-                {(globalStudents || []).filter(r => !search || r.username.toLowerCase().includes(search.toLowerCase()) || (r.name||'').toLowerCase().includes(search.toLowerCase()) || (r.schoolName||'').toLowerCase().includes(search.toLowerCase())).map((r, idx) => (
-                  <GlobalStudentRowItem key={r.username} row={r} rank={idx + 1} isMe={me === r.username} />
-                ))}
+                {(globalStudents || []).filter(r => {
+                  const resolvedSchoolName = r.schoolName || schoolsList.find((s) => s.id === r.schoolId)?.name || '';
+                  return !search
+                    || r.username.toLowerCase().includes(search.toLowerCase())
+                    || (r.name || '').toLowerCase().includes(search.toLowerCase())
+                    || resolvedSchoolName.toLowerCase().includes(search.toLowerCase());
+                }).map((r, idx) => {
+                  const resolvedSchoolName = r.schoolName || schoolsList.find((s) => s.id === r.schoolId)?.name;
+                  return <GlobalStudentRowItem key={r.username} row={r} rank={idx + 1} isMe={me === r.username} schoolName={resolvedSchoolName} />;
+                })}
               </div>
             </div>
           )}
@@ -363,7 +410,17 @@ export default function LeaderboardPage() {
               <div className="divide-y divide-white/10">
                 {loadingTab && <div className="px-6 py-8 text-white/70 text-sm text-center"><div className="w-8 h-8 rounded-full border-2 border-white/30 border-t-white/90 animate-spin mx-auto"></div></div>}
                 {(!loadingTab && (teachers?.length ?? 0) === 0) && <div className="px-6 py-8 text-white/70 text-sm text-center">🔍 No teachers found.</div>}
-                {(teachers || []).filter(r => !search || r.username.toLowerCase().includes(search.toLowerCase()) || (r.name||'').toLowerCase().includes(search.toLowerCase()) || (r.schoolName||'').toLowerCase().includes(search.toLowerCase())).map((t, idx) => (
+                {(teachers || []).filter(r => {
+                  const resolvedSchoolName = r.schoolName || schoolsList.find((s) => s.id === r.schoolId)?.name || '';
+                  const displaySchool = resolvedSchoolName || r.schoolId || '';
+                  return !search
+                    || r.username.toLowerCase().includes(search.toLowerCase())
+                    || (r.name || '').toLowerCase().includes(search.toLowerCase())
+                    || displaySchool.toLowerCase().includes(search.toLowerCase());
+                }).map((t, idx) => {
+                  const resolvedSchoolName = t.schoolName || schoolsList.find((s) => s.id === t.schoolId)?.name;
+                  const displaySchool = resolvedSchoolName || (t.schoolId ? 'Unknown School' : '—');
+                  return (
                   <HoverCard key={t.username}>
                     <HoverCardTrigger asChild>
                       <div className="grid grid-cols-12 px-6 py-4 hover:bg-white/10 text-white/90 transition-all duration-200 group cursor-default">
@@ -372,7 +429,7 @@ export default function LeaderboardPage() {
                           <span className="group-hover:text-yellow-300 transition-colors">#{idx + 1}</span>
                         </div>
                         <div className="col-span-4 font-medium group-hover:text-white transition-colors">@{t.username} {t.name && <span className="text-white/70 ml-2">{t.name}</span>}</div>
-                        <div className="col-span-2 text-white/70 group-hover:text-white/90 transition-colors">{t.schoolName || '—'}</div>
+                        <div className="col-span-2 text-white/70 group-hover:text-white/90 transition-colors">{displaySchool}</div>
                         <div className="col-span-2 text-right font-bold text-yellow-300 group-hover:text-yellow-200 transition-colors">{formatPoints(t.ecoPoints)}</div>
                         <div className="col-span-1 text-right text-white/70 group-hover:text-white/90 transition-colors">{t.tasksCreated}</div>
                         <div className="col-span-1 text-right text-white/70 group-hover:text-white/90 transition-colors">{t.quizzesCreated}</div>
@@ -382,7 +439,8 @@ export default function LeaderboardPage() {
                       <TeacherHoverPreview username={t.username} />
                     </HoverCardContent>
                   </HoverCard>
-                ))}
+                  );
+                })}
               </div>
             </div>
           )}
@@ -442,7 +500,7 @@ function SchoolHoverPreview({ schoolId, fallback }: { schoolId: string; fallback
     })();
     return () => { mounted = false; };
   }, [schoolId]);
-  if (!loaded && !data) return <div className="text-xs text-white/70">Loading…</div>;
+  if (!loaded && !data) return <InlineLoadingSkeleton />;
   if (!data) return <div className="text-xs text-red-300">Not available</div>;
   return (
     <div className="text-sm">
@@ -480,7 +538,7 @@ function StudentRowItem({ row, rank, isMe }: { row: StudentRow; rank: number; is
   );
 }
 
-function GlobalStudentRowItem({ row, rank, isMe }: { row: GlobalStudentRow; rank: number; isMe: boolean }) {
+function GlobalStudentRowItem({ row, rank, isMe, schoolName }: { row: GlobalStudentRow; rank: number; isMe: boolean; schoolName?: string }) {
   const [open, setOpen] = useState(false);
   return (
     <HoverCard open={open} onOpenChange={setOpen}>
@@ -492,7 +550,7 @@ function GlobalStudentRowItem({ row, rank, isMe }: { row: GlobalStudentRow; rank
             {row.name && <span className="text-white/70 ml-2">{row.name}</span>}
             {isMe && <span className="ml-2 text-xs px-2 py-0.5 rounded-full bg-emerald-700/30 border border-emerald-600 text-emerald-200">you</span>}
           </div>
-          <div className="col-span-4 text-white/70">{row.schoolName || '—'}</div>
+          <div className="col-span-4 text-white/70">{schoolName || '—'}</div>
           <div className="col-span-2 text-right font-medium">{formatPoints(row.ecoPoints)}</div>
           <div className="col-span-12 pl-6 mt-1 flex gap-2 text-sm text-amber-200">
             {(row.achievements || []).slice(0,3).map((a: string, i: number)=>(<span key={i}>{a}</span>))}

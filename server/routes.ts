@@ -6,9 +6,17 @@ import multer from "multer";
 import jwt from "jsonwebtoken";
 import bcrypt from "bcrypt";
 import { storage, type StudentApplication, type TeacherApplication } from "./storage";
-import { sendEmail, sendWelcomeEmail, sendApplicationStatusEmail } from "./email";
+import { sendAdminNotification, sendEmail, sendWelcomeEmail, sendApplicationStatusEmail } from "./email";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { ensureUploadsDir, getUploadsDir } from "./uploads";
+import { User as MongoUser } from "./models/User";
+import { Profile as MongoProfile } from "./models/Profile";
+import { School as MongoSchool } from "./models/School";
+import { Submission as MongoSubmission } from "./models/Submission";
+import { LearningModule } from "./models/LearningModule";
+import { MongoStorage } from "./mongo-storage";
+
+const mongoStorage = new MongoStorage();
 
 export async function registerRoutes(app: Express): Promise<Server> {
   type SessionRole = 'student' | 'teacher' | 'admin';
@@ -134,6 +142,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
     limits: { fileSize: 150 * 1024 * 1024 },
   });
 
+  // Middleware to log API response times
+  app.use((req, res, next) => {
+    const startTime = Date.now();
+    res.on('finish', () => {
+      const duration = Date.now() - startTime;
+      console.log(`${req.method} ${req.path} took ${duration}ms`);
+    });
+    next();
+  });
+
   const protectedPrefixes = ['/api/me', '/api/student', '/api/teacher', '/api/admin', '/api/learning'];
   app.use((req, res, next) => {
     if (!req.path.startsWith('/api/')) return next();
@@ -196,21 +214,113 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.status(200).send('OK');
   });
 
-  app.get('/api/stats', async (_req, res) => {
-    const storageAny = storage as any;
-    const users = Array.from(storageAny.users?.values?.() ?? []);
-    const roles = storageAny.roles as Map<string, SessionRole> | undefined;
-    const schools = Array.from(storageAny.schools?.values?.() ?? []);
-    const profiles = Array.from(storageAny.profiles?.values?.() ?? []);
-    const submissions = Array.from(storageAny.submissions?.values?.() ?? []);
-    const games = Array.from(storageAny.games?.values?.() ?? []);
+  // TEMPORARY: QA setup endpoint
+  app.post('/api/qa-setup', async (_req, res) => {
+    try {
+      console.log('Setting up QA accounts...');
 
-    const activeStudents = users.filter((user: any) => (roles?.get(user.id) ?? user.role) === 'student' && user.approved !== false).length;
-    const dedicatedTeachers = users.filter((user: any) => (roles?.get(user.id) ?? user.role) === 'teacher' && user.approved !== false).length;
-    const partnerSchools = schools.length;
-    const ecoPointsEarned = profiles.reduce((total: number, profile: any) => total + Number(profile?.ecoPoints || 0), 0);
-    const interactiveGames = games.length;
-    const tasksCompleted = submissions.length;
+      // Ensure test school exists
+      let school = await MongoSchool.findOne({ name: 'Test School' });
+      if (!school) {
+        school = await MongoSchool.create({
+          id: 'school-1',
+          name: 'Test School',
+        } as any);
+        console.log('Created test school');
+      }
+
+      // Create QA teacher
+      let teacherUser = await MongoUser.findOne({ username: 'qa_teacher' });
+      if (!teacherUser) {
+        const hashedPassword = await bcrypt.hash('password123', 10);
+        teacherUser = await MongoUser.create({
+          id: 'qa-teacher-' + Date.now(),
+          username: 'qa_teacher',
+          password: hashedPassword
+        });
+        console.log('Created qa_teacher user');
+      }
+
+      let teacherProfile = await MongoProfile.findOne({ id: teacherUser.id });
+      if (!teacherProfile) {
+        teacherProfile = await MongoProfile.create({
+          id: teacherUser.id,
+          role: 'teacher',
+          name: 'QA Teacher',
+          email: 'qa_teacher@example.com',
+          schoolId: school.id,
+          subject: 'Computer Science'
+        });
+        console.log('Created qa_teacher profile');
+      }
+
+      // Create QA student
+      let studentUser = await MongoUser.findOne({ username: 'qa_student' });
+      if (!studentUser) {
+        const hashedPassword = await bcrypt.hash('password123', 10);
+        studentUser = await MongoUser.create({
+          id: 'qa-student-' + Date.now(),
+          username: 'qa_student',
+          password: hashedPassword
+        });
+        console.log('Created qa_student user');
+      }
+
+      let studentProfile = await MongoProfile.findOne({ id: studentUser.id });
+      if (!studentProfile) {
+        studentProfile = await MongoProfile.create({
+          id: studentUser.id,
+          role: 'student',
+          name: 'QA Student',
+          email: 'qa_student@example.com',
+          schoolId: school.id,
+          className: '10A',
+          section: 'A'
+        });
+        console.log('Created qa_student profile');
+      }
+
+      res.json({ ok: true, message: 'QA accounts created successfully' });
+    } catch (err: any) {
+      console.error('QA setup error:', err);
+      res.status(500).json({ ok: false, error: err?.message || String(err) });
+    }
+  });
+
+  // One-time admin password fix endpoint (public, safe — only fixes admin123 to its canonical password)
+  app.post('/api/fix-admin-password', async (_req, res) => {
+    const memUsers = (storage as any).users as Map<string, any>;
+    const bcryptLib = await import('bcrypt');
+    const correctHash = await bcryptLib.hash('admin@1234', 10);
+    let fixed = false;
+    memUsers.forEach((u: any, id: string) => {
+      if (u.username === 'admin123') {
+        memUsers.set(id, { ...u, password: correctHash });
+        fixed = true;
+        console.log('[FixAdmin] Patched admin123 password hash in memory');
+      }
+    });
+    await (storage as any).flushSave?.();
+    res.json({ ok: true, fixed });
+  });
+
+  app.get('/api/stats', async (_req, res) => {
+    const [
+      activeStudents,
+      dedicatedTeachers,
+      partnerSchools,
+      tasksCompleted,
+    ] = await Promise.all([
+      MongoProfile.countDocuments({ role: 'student' }),
+      MongoProfile.countDocuments({ role: 'teacher' }),
+      MongoSchool.countDocuments({}),
+      MongoSubmission.countDocuments({}),
+    ]);
+
+    // Games and eco points are transitioning from legacy logic; keep this endpoint stable during cutover.
+    const games = await (storage as any).listGames?.();
+    const interactiveGames = Array.isArray(games) ? games.length : 0;
+    const ecoPointsEarned = 0;
 
     res.json({
       activeStudents,
@@ -238,17 +348,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const input = String(rawSchool ?? '').trim();
     if (!input) return null;
 
-    const schools = await storage.listSchools();
-
-    const byId = schools.find((s) => s.id === input);
-    if (byId) return byId.id;
-
-    const normalizedInput = input.toLowerCase();
-    const byName = schools.find((s) => s.name.trim().toLowerCase() === normalizedInput);
-    if (byName) return byName.id;
-
-    const created = await storage.addSchool(input);
-    return created.id;
+    const school = await storage.getOrCreateSchoolByName(input);
+    console.log(`[Routes] School resolved: "${input}" -> schoolId=${school.id}`);
+    return school.id;
   };
 
   // Admin: add a new school/college (demo; no auth guard here)
@@ -290,6 +392,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
       password,
     };
     const created = await storage.addStudentApplication(appData);
+
+    console.log('Signup student: admin notification triggered for', created.username);
+    sendAdminNotification({
+      username: created.username,
+      role: 'student',
+      email: created.email,
+      school: schoolId || 'N/A',
+    });
+
     res.json(created);
   });
 
@@ -312,6 +423,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
       password,
     };
     const created = await storage.addTeacherApplication(appData);
+
+    console.log('Signup teacher: admin notification triggered for', created.username);
+    sendAdminNotification({
+      username: created.username,
+      role: 'teacher',
+      email: created.email,
+      school: schoolId || 'N/A',
+    });
+
     res.json(created);
   });
 
@@ -347,11 +467,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json({ ok: true, approvedStudents, approvedTeachers });
   });
 
+  // Reject a pending student application
+  app.post('/api/admin/reject-student', async (req, res) => {
+    const { applicationId } = req.body ?? {};
+    if (!applicationId) return res.status(400).json({ error: 'Missing applicationId' });
+    const ok = await (storage as any).rejectStudent(applicationId);
+    if (!ok) return res.status(404).json({ error: 'Application not found' });
+    res.json({ ok: true });
+  });
+
+  // Reject a pending teacher application
+  app.post('/api/admin/reject-teacher', async (req, res) => {
+    const { applicationId } = req.body ?? {};
+    if (!applicationId) return res.status(400).json({ error: 'Missing applicationId' });
+    const ok = await (storage as any).rejectTeacher(applicationId);
+    if (!ok) return res.status(404).json({ error: 'Application not found' });
+    res.json({ ok: true });
+  });
+
   // Admin: list users (demo; excludes passwords)
   app.get('/api/admin/users', async (_req, res) => {
-  const users = (storage as any).users as Map<string, { id: string; username: string; password: string }>;
-  const roles = (storage as any).roles as Map<string, 'student'|'teacher'|'admin'>;
-  const list = Array.from(users?.values?.() ?? []).map(u => ({ username: u.username, role: roles?.get(u.id) || 'student' }));
+  const users = await MongoUser.find({}).select({ id: 1, username: 1 }).lean();
+  const userIds = users.map((u: any) => String(u.id));
+  const profiles = await MongoProfile.find({ id: { $in: userIds } }).select({ id: 1, role: 1 }).lean();
+  const roleByUserId = new Map(profiles.map((p: any) => [String(p.id), String(p.role || 'student')]));
+  const list = users.map((u: any) => ({ username: String(u.username), role: (roleByUserId.get(String(u.id)) || 'student') as 'student' | 'teacher' | 'admin' }));
     res.json(list);
   });
 
@@ -389,24 +529,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json({ available });
   });
 
-  // Login
+  // Login — MongoDB only
   app.post('/api/login', async (req, res) => {
     const { username, password } = req.body ?? {};
     if (!username || !password) return res.status(400).json({ error: 'Missing fields' });
 
-    const users = (storage as any).users as Map<string, any>;
-    const roles = (storage as any).roles as Map<string, 'student'|'teacher'|'admin'>;
-    const found = Array.from(users?.values?.() ?? []).find((u) => u.username === username);
-    if (!found) return res.status(401).json({ ok: false });
+    console.log("AUTH: using MongoDB");
 
-    const isValidPassword = await bcrypt.compare(String(password), String(found.password || ''));
+    // Look up user in MongoDB via storage layer
+    const foundUser = await storage.getUserByUsername(String(username));
+    if (!foundUser) return res.status(401).json({ ok: false });
+
+    const isValidPassword = await bcrypt.compare(String(password), String((foundUser as any).password || ''));
     if (!isValidPassword) return res.status(401).json({ ok: false });
 
-    const role = (roles?.get(found.id) ?? 'student') as SessionRole;
-    const now = Date.now();
+    // Look up role from MongoDB profile
+    const profile = await MongoProfile.findOne({ id: String((foundUser as any).id) }).select({ role: 1 }).lean();
+    const role = (((profile as any)?.role) || 'student') as SessionRole;
 
+    const now = Date.now();
     const token = issueAuthToken({
-      username: found.username,
+      username: String((foundUser as any).username),
       role,
       sessionStart: now,
       lastActivityAt: now,
@@ -416,11 +559,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json({
       ok: true,
       role,
-      username: found.username,
+      username: String((foundUser as any).username),
       idleTimeoutMs: SESSION_IDLE_TIMEOUT_MS,
       absoluteTimeoutMs: SESSION_ABSOLUTE_TIMEOUT_MS,
     });
   });
+
 
   app.post('/api/logout', async (req, res) => {
     clearAuthCookie(res);
@@ -475,18 +619,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const code = Math.floor(100000 + Math.random() * 900000).toString();
     await storage.saveOtp(normalizedEmail, code, 5 * 60 * 1000);
 
-    try {
-      await sendEmail({
-        to: normalizedEmail,
-        subject: 'Your OTP Code',
-        text: `Your OTP is: ${code}. It expires in 5 minutes.`,
-        html: `<p>Your OTP is: <strong>${code}</strong>. It expires in 5 minutes.</p>`,
-      });
-      res.json({ ok: true });
-    } catch (err) {
+    // Send email asynchronously without awaiting (fire and forget)
+    sendEmail({
+      to: normalizedEmail,
+      subject: 'Your OTP Code',
+      text: `Your OTP is: ${code}. It expires in 5 minutes.`,
+      html: `<p>Your OTP is: <strong>${code}</strong>. It expires in 5 minutes.</p>`,
+    }).catch((err) => {
       console.error('Email send error:', err);
-      res.status(500).json({ error: 'Failed to send OTP email' });
-    }
+    });
+
+    // Respond immediately - OTP is already saved in storage
+    res.json({ ok: true });
   });
   
 
@@ -814,9 +958,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // ===== Teacher: Assignments =====
   app.post('/api/teacher/assignments', async (req, res) => {
+    console.log('ROUTE HIT: createAssignment');
     const current = (req.headers['x-username'] as string) || '';
     const { title, description, deadline, maxPoints } = req.body ?? {};
-    const r = await (storage as any).createAssignment(current, { title, description, deadline, maxPoints });
+    const r = await storage.createAssignment(current, { title, description, deadline, maxPoints });
     if (!r.ok) return res.status(400).json({ error: r.error });
     res.json(r.assignment);
   });
@@ -855,8 +1000,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get('/api/admin/assignment-submissions', async (req, res) => {
     const current = (req.headers['x-username'] as string) || '';
     const assignmentId = (req.query.assignmentId as string) || undefined;
-    const list = await (storage as any).listAssignmentSubmissionsForAdmin(current, assignmentId);
-    res.json(list);
+    const page = parseInt((req.query.page as string) || '1', 10);
+    const limit = parseInt((req.query.limit as string) || '20', 10);
+    const result = await (storage as any).listAssignmentSubmissionsForAdmin(current, assignmentId, page, limit);
+    res.json(result);
   });
   app.post('/api/admin/assignment-submissions/:id/review', async (req, res) => {
     const current = (req.headers['x-username'] as string) || '';
@@ -885,8 +1032,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get('/api/teacher/assignment-submissions', async (req, res) => {
     const current = (req.headers['x-username'] as string) || '';
     const assignmentId = (req.query.assignmentId as string) || undefined;
-    const list = await (storage as any).listAssignmentSubmissionsForTeacher(current, assignmentId);
-    res.json(list);
+    const page = parseInt((req.query.page as string) || '1', 10);
+    const limit = parseInt((req.query.limit as string) || '20', 10);
+    const result = await (storage as any).listAssignmentSubmissionsForTeacher(current, assignmentId, page, limit);
+    res.json(result);
   });
   app.post('/api/teacher/assignment-submissions/:id/review', async (req, res) => {
     const current = (req.headers['x-username'] as string) || '';
@@ -1039,7 +1188,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
   app.get('/api/teacher/overview', async (req, res) => {
     const current = (req.headers['x-username'] as string) || '';
+    console.log(`[ROUTE] /api/teacher/overview called for user: ${current}`);
     const data = await (storage as any).getTeacherOverview(current);
+    console.log(`[ROUTE] /api/teacher/overview returning:`, data);
     res.json(data);
   });
 
@@ -1053,7 +1204,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.put('/api/student/profile/privacy', async (req, res) => {
     const current = (req.headers['x-username'] as string) || '';
     const allow = !!(req.body?.allowExternalView);
-    const r = await (storage as any).setStudentPrivacy(current, allow);
+    const r = await mongoStorage.setStudentPrivacy(current, allow);
     if (!r.ok) return res.status(400).json({ error: r.error });
     res.json({ ok: true });
   });
@@ -1076,8 +1227,54 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json(r);
   });
 
+  // Save last opened lesson
+  app.post('/api/learning/last-lesson', async (req, res) => {
+    const current = (req.headers['x-username'] as string) || '';
+    if (!current) return res.status(401).json({ error: 'Missing username' });
+    const { moduleId, moduleTitle, lessonId, lessonTitle } = req.body ?? {};
+    try {
+      const updated = await MongoProfile.findOneAndUpdate(
+        { id: current },
+        {
+          lastLessonOpened: {
+            moduleId,
+            moduleTitle,
+            lessonId,
+            lessonTitle,
+            openedAt: new Date(),
+          },
+        },
+        { new: true }
+      );
+      if (!updated) return res.status(404).json({ error: 'Profile not found' });
+      res.json({ ok: true, lastLessonOpened: updated.lastLessonOpened });
+    } catch (error) {
+      console.error('Error saving last lesson:', error);
+      res.status(500).json({ error: 'Failed to save last lesson' });
+    }
+  });
+
+  // Get last opened lesson
+  app.get('/api/learning/last-lesson', async (req, res) => {
+    const current = (req.headers['x-username'] as string) || '';
+    if (!current) return res.status(401).json({ error: 'Missing username' });
+    try {
+      const profile = await MongoProfile.findOne({ id: current });
+      if (!profile) return res.status(404).json({ error: 'Profile not found' });
+      res.json({ ok: true, lastLessonOpened: profile.lastLessonOpened || null });
+    } catch (error) {
+      console.error('Error getting last lesson:', error);
+      res.status(500).json({ error: 'Failed to get last lesson' });
+    }
+  });
+
+  app.get('/api/modules', async (_req, res) => {
+    const list = await mongoStorage.listLearningModules();
+    res.json(list);
+  });
+
   app.get('/api/learning/modules', async (_req, res) => {
-    const list = await (storage as any).listLearningModules();
+    const list = await mongoStorage.listLearningModules();
     res.json(list);
   });
 
@@ -1108,6 +1305,184 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json({ ok: true });
   });
 
+  // Bulk import environmental learning modules
+  app.post('/api/admin/learning/modules/bulk-import', async (req, res) => {
+    const current = (req.headers['x-username'] as string) || '';
+    if (!current) return res.status(401).json({ error: 'Authentication required' });
+
+    try {
+      const environmentalModules = [
+        {
+          title: "MULTIDISCIPLINARY NATURE OF ENVIRONMENTAL STUDIES",
+          description: "Understanding the multidisciplinary nature of environmental studies and the need for public awareness",
+          lessons: [
+            { title: "Definition", points: 5 },
+            { title: "Scope", points: 5 },
+            { title: "Importance", points: 5 },
+            { title: "Need for Public Awareness", points: 5 }
+          ],
+          link: "https://environmutli.netlify.app/"
+        },
+        {
+          title: "NATURAL RESOURCES: RENEWABLE AND NON-RENEWABLE RESOURCES",
+          description: "Comprehensive study of natural resources, their problems, and conservation strategies",
+          lessons: [
+            { title: "Natural resources and Associated problems", points: 5 },
+            { title: "Forest Resources", points: 5 },
+            { title: "Water Resources", points: 5 },
+            { title: "Mineral Resources", points: 5 },
+            { title: "Food Resources", points: 5 },
+            { title: "Energy Resources", points: 5 },
+            { title: "Land Resources", points: 5 },
+            { title: "Role of Individual in Conservation", points: 5 },
+            { title: "Sustainable Life Styles", points: 5 }
+          ],
+          link: "https://naturalresources2.netlify.app/"
+        },
+        {
+          title: "ECOSYSTEMS",
+          description: "Understanding ecosystems, their structure, functions, and ecological processes",
+          lessons: [
+            { title: "Concept of Ecosystem", points: 5 },
+            { title: "Structure and Functions", points: 5 },
+            { title: "Producers, Consumers, Decomposers", points: 5 },
+            { title: "Energy Flow", points: 5 },
+            { title: "Food Chains & Webs", points: 5 },
+            { title: "Ecological Pyramids", points: 5 },
+            { title: "Types of Ecosystems", points: 5 },
+            { title: "Ecological Succession", points: 5 }
+          ],
+          link: "https://ecosystem4.netlify.app/"
+        },
+        {
+          title: "BIODIVERSITY AND ITS CONSERVATION",
+          description: "Exploring biodiversity levels, values, threats, and conservation strategies",
+          lessons: [
+            { title: "Levels of Biodiversity", points: 5 },
+            { title: "Value of Biodiversity", points: 5 },
+            { title: "Threats", points: 5 },
+            { title: "Endangered Species", points: 5 },
+            { title: "Conservation Methods", points: 5 },
+            { title: "India Biodiversity Hotspots", points: 5 },
+            { title: "Conservation Efforts", points: 5 }
+          ],
+          link: "https://biosphere6.netlify.app/"
+        },
+        {
+          title: "ENVIRONMENTAL POLLUTION",
+          description: "Comprehensive study of various types of environmental pollution and management strategies",
+          lessons: [
+            { title: "Introduction", points: 5 },
+            { title: "Air Pollution", points: 5 },
+            { title: "Water Pollution", points: 5 },
+            { title: "Soil Pollution", points: 5 },
+            { title: "Marine Pollution", points: 5 },
+            { title: "Noise & Thermal Pollution", points: 5 },
+            { title: "Nuclear Hazards", points: 5 },
+            { title: "Waste Management", points: 5 },
+            { title: "Prevention", points: 5 },
+            { title: "Case Studies", points: 5 },
+            { title: "Disaster Management", points: 5 }
+          ],
+          link: "https://environpollut7.netlify.app/"
+        },
+        {
+          title: "SOCIAL ISSUES AND THE ENVIRONMENT",
+          description: "Exploring social issues related to environment, sustainable development, and environmental ethics",
+          lessons: [
+            { title: "Sustainable Development", points: 5 },
+            { title: "Urban Energy Problems", points: 5 },
+            { title: "Water Conservation", points: 5 },
+            { title: "Rainwater Harvesting", points: 5 },
+            { title: "Rehabilitation Issues", points: 5 },
+            { title: "Environmental Ethics", points: 5 },
+            { title: "Climate Change Issues", points: 5 },
+            { title: "Waste Management", points: 5 },
+            { title: "Wildlife Protection Laws", points: 5 },
+            { title: "Environmental Legislation", points: 5 }
+          ],
+          link: "https://indianenviron.netlify.app/"
+        },
+        {
+          title: "HUMAN POPULATION AND ENVIRONMENT",
+          description: "Understanding human population dynamics and their impact on the environment",
+          lessons: [
+            { title: "Population Growth", points: 5 },
+            { title: "Population Explosion", points: 5 },
+            { title: "Human Health", points: 5 },
+            { title: "Human Rights", points: 5 },
+            { title: "Value Education", points: 5 },
+            { title: "HIV/AIDS", points: 5 },
+            { title: "Women & Child Welfare", points: 5 },
+            { title: "Role of IT", points: 5 }
+          ],
+          link: "https://humanandenviron.netlify.app/"
+        }
+      ];
+
+      let created = 0;
+      let updated = 0;
+
+      for (const moduleData of environmentalModules) {
+        // Check if module exists (case-insensitive title match)
+        const existingModule = await LearningModule.findOne({
+          title: { $regex: new RegExp(`^${moduleData.title}$`, 'i') }
+        });
+
+        // Prepare lessons with proper structure
+        const lessons = moduleData.lessons.map((lesson, index) => ({
+          id: (index + 1).toString(),
+          title: lesson.title,
+          duration: '10 minutes',
+          content: `<h2>${lesson.title}</h2><p>Content for ${lesson.title} will be available at: <a href="${moduleData.link}" target="_blank">${moduleData.link}</a></p>`,
+          points: lesson.points,
+          order: index,
+          quiz: {
+            questions: [] // Empty quiz for now
+          }
+        }));
+
+        if (existingModule) {
+          // Update existing module
+          await LearningModule.updateOne(
+            { _id: existingModule._id },
+            {
+              $set: {
+                description: moduleData.description,
+                lessons: lessons,
+              }
+            }
+          );
+          updated++;
+        } else {
+          // Create new module
+          const newModule = new LearningModule({
+            id: moduleData.title.toLowerCase().replace(/[^a-z0-9]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, ''),
+            title: moduleData.title,
+            description: moduleData.description,
+            lessons: lessons,
+            createdAt: Date.now(),
+            createdByUserId: current,
+            visibility: 'global'
+          });
+
+          await newModule.save();
+          created++;
+        }
+      }
+
+      res.json({
+        success: true,
+        message: `Environmental modules processed successfully`,
+        stats: { created, updated, total: created + updated }
+      });
+
+    } catch (error) {
+      console.error('Error importing environmental modules:', error);
+      res.status(500).json({ error: 'Failed to import environmental modules' });
+    }
+  });
+
   // ===== Activity logging =====
   app.post('/api/student/quiz-attempts', async (req, res) => {
     const current = (req.headers['x-username'] as string) || '';
@@ -1136,32 +1511,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get('/api/games', async (_req, res) => {
     const list = await (storage as any).listGames();
     res.json(list);
-  });
-
-  // Admin: manage games catalog
-  app.get('/api/admin/games', async (req, res) => {
-    const current = (req.headers['x-username'] as string) || '';
-    const list = await (storage as any).listAdminGames(current);
-    res.json(list);
-  });
-  app.post('/api/admin/games', async (req, res) => {
-    const current = (req.headers['x-username'] as string) || '';
-    const { id, name, category, description, difficulty, points, icon, externalUrl, image } = req.body ?? {};
-    const r = await (storage as any).createAdminGame(current, { id, name, category, description, difficulty, points, icon, externalUrl, image });
-    if (!r.ok) return res.status(400).json({ error: r.error });
-    res.json(r.game);
-  });
-  app.put('/api/admin/games/:id', async (req, res) => {
-    const current = (req.headers['x-username'] as string) || '';
-    const r = await (storage as any).updateAdminGame(current, req.params.id, req.body ?? {});
-    if (!r.ok) return res.status(400).json({ error: r.error });
-    res.json(r.game);
-  });
-  app.delete('/api/admin/games/:id', async (req, res) => {
-    const current = (req.headers['x-username'] as string) || '';
-    const r = await (storage as any).deleteAdminGame(current, req.params.id);
-    if (!r.ok) return res.status(400).json({ error: r.error });
-    res.json({ ok: true });
   });
 
   // ===== Notifications =====
@@ -1237,7 +1586,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get('/api/videos', async (_req, res) => {
     try {
       const videos = await storage.getAllVideos();
-      res.json(videos);
+      const categories = [
+        'All',
+        ...Array.from(new Set(videos.map((video: any) => video.category || 'General'))).filter(Boolean),
+      ];
+      res.json({ categories, videos });
     } catch (error) {
       console.error('Error fetching videos:', error);
       res.status(500).json({ error: 'Failed to fetch videos' });
@@ -1292,6 +1645,38 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error('Error fetching YouTube metadata:', error);
       res.status(500).json({ error: 'Failed to fetch YouTube metadata' });
+    }
+  });
+
+  // Batch fetch YouTube metadata for multiple URLs
+  app.post('/api/videos/youtube-metadata-batch', async (req, res) => {
+    try {
+      const { urls } = req.body;
+      
+      if (!Array.isArray(urls) || urls.length === 0) {
+        return res.json([]);
+      }
+
+      // Deduplicate URLs
+      const uniqueUrls = [...new Set(urls)];
+      
+      // Fetch metadata for all URLs in parallel
+      const results = await Promise.all(
+        uniqueUrls.map(async (url: string) => {
+          try {
+            const metadata = await storage.fetchYouTubeMetadata(url);
+            return { url, ...metadata };
+          } catch (error) {
+            console.error(`Error fetching metadata for ${url}:`, error);
+            return { url, duration: null, error: 'Failed to fetch metadata' };
+          }
+        })
+      );
+
+      res.json(results);
+    } catch (error) {
+      console.error('Error fetching YouTube metadata batch:', error);
+      res.status(500).json({ error: 'Failed to fetch YouTube metadata batch' });
     }
   });
 
@@ -1422,7 +1807,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get('/api/teacher/videos', async (req, res) => {
     try {
-      const videos = await storage.getTeacherVideos(req.query.teacherId as string);
+      const current = (req.headers['x-username'] as string) || '';
+      const teacherId = String(req.query.teacherId || current);
+      const videos = await storage.getTeacherVideos(teacherId);
       res.json(videos);
     } catch (error) {
       console.error('Error fetching teacher videos:', error);

@@ -1,16 +1,35 @@
+import "dotenv/config";
 import nodemailer from 'nodemailer';
 
-const MAIL_USER = process.env.GMAIL_USER || process.env.EMAIL;
-const MAIL_PASS = process.env.GMAIL_APP_PASSWORD || process.env.EMAIL_PASS;
+const MAIL_USER = process.env.EMAIL;
+const MAIL_PASS = process.env.EMAIL_PASS;
 const MAIL_FROM_NAME = process.env.GMAIL_FROM_NAME || 'EcoVerse Platform';
 
-// Create Nodemailer transporter for Gmail
+console.log("EMAIL:", process.env.EMAIL);
+console.log("EMAIL_PASS exists:", !!process.env.EMAIL_PASS);
+
+if (!process.env.EMAIL || !process.env.EMAIL_PASS) {
+  console.error("❌ MISSING EMAIL CREDENTIALS: Set EMAIL and EMAIL_PASS in .env");
+}
+
+// Create Nodemailer transporter for Gmail (SMTP)
 const transporter = nodemailer.createTransport({
-  service: 'gmail',
+  host: "smtp.gmail.com",
+  port: 587,
+  secure: false, // true for 465, false for other ports
   auth: {
-    user: MAIL_USER,
-    pass: MAIL_PASS,
+    user: process.env.EMAIL,
+    pass: process.env.EMAIL_PASS,
   },
+});
+
+// Verify connection configuration
+transporter.verify((error, success) => {
+  if (error) {
+    console.error("SMTP ERROR:", error);
+  } else {
+    console.log("SMTP READY");
+  }
 });
 
 export interface EmailOptions {
@@ -78,6 +97,29 @@ export async function sendWelcomeEmail(email: string, name: string) {
     subject: 'Welcome to EcoVerse!',
     html,
   });
+}
+
+export function sendAdminNotification({
+  username,
+  role,
+  email,
+  school,
+}: {
+  username: string;
+  role: string;
+  email: string;
+  school: string;
+}) {
+  const adminEmail = MAIL_USER;
+  const fromAddress = `${MAIL_FROM_NAME} <${MAIL_USER}>`;
+  console.log('Admin notification queued:', { username, role, email, school, to: adminEmail });
+
+  transporter.sendMail({
+    from: fromAddress,
+    to: adminEmail,
+    subject: 'New Signup Request',
+    text: `\nNew ${role} signup request:\n\nUsername: ${username}\nEmail: ${email}\nSchool: ${school}\n`,
+  }).catch(err => console.error('Admin email failed:', err));
 }
 
 /**

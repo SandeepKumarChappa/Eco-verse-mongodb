@@ -6,13 +6,7 @@ export default function SignUpPage() {
   const { setRole, clear } = useAuth();
   const [, navigate] = useLocation();
 
-  const choose = (r: "student" | "teacher" | "admin") => {
-    if (r === "admin") {
-      // Clear any existing role before navigating to admin signin
-      clear();
-      navigate("/signin?role=admin");
-      return;
-    }
+  const choose = (r: "student" | "teacher") => {
     // For student/teacher signup, set the role temporarily
     // setRole(r);
     if (r === "student") navigate("/student/signup");
@@ -41,7 +35,7 @@ export default function SignUpPage() {
           </div>
 
           {/* Role Selection Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
             {/* Student Card */}
             <button
               onClick={() => choose("student")}
@@ -73,23 +67,6 @@ export default function SignUpPage() {
                 </div>
                 <h3 className="text-xl font-bold text-gray-800">I'm a Teacher</h3>
                 <p className="text-sm text-gray-600 text-center">Guide the next generation</p>
-              </div>
-            </button>
-
-            {/* Admin Card */}
-            <button
-              onClick={() => choose("admin")}
-              className="group relative p-6 rounded-2xl bg-gradient-to-br from-orange-100 to-amber-100 hover:from-orange-200 hover:to-amber-200 border-3 border-orange-300 hover:border-orange-400 shadow-lg hover:shadow-2xl transform hover:-translate-y-2 transition-all duration-300"
-              data-testid="role-admin-button"
-            >
-              <div className="flex flex-col items-center space-y-3">
-                <div className="p-4 bg-orange-500 rounded-full group-hover:scale-110 transition-transform duration-300">
-                  <svg className="w-10 h-10 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
-                  </svg>
-                </div>
-                <h3 className="text-xl font-bold text-gray-800">Admin</h3>
-                <p className="text-sm text-gray-600 text-center">Manage the platform</p>
               </div>
             </button>
           </div>

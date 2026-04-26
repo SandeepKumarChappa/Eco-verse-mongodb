@@ -32,6 +32,7 @@ import SignupAnimatedBackground from "@/components/SignupAnimatedBackground";
 import { useAuth } from "@/lib/auth";
 import { useLocation } from "wouter";
 import { useToast } from "@/hooks/use-toast";
+import toast from "react-hot-toast";
 
 export default function TeacherSignupWizard() {
   const { setRole } = useAuth();
@@ -179,27 +180,37 @@ export default function TeacherSignupWizard() {
     }
 
     setSubmitting(true);
-    // OTP is already verified in real-time, so we can proceed directly to signup
-    await fetch('/api/signup/teacher', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        name: form.name,
-        email: form.email,
-        username: form.username,
-        schoolId: form.schoolId,
-        id: form.id,
-        subject: form.subject,
-        photoDataUrl: form.photoDataUrl,
-        password: form.password,
-      })
-    });
-    setSubmitting(false);
-    toast({
-      title: 'Application Submitted',
-      description: 'Your application has been submitted successfully. Please wait for admin approval.',
-    });
-    setTimeout(() => navigate('/signin'), 2000);
+    try {
+      // OTP is already verified in real-time, so we can proceed directly to signup
+      await fetch('/api/signup/teacher', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: form.name,
+          email: form.email,
+          username: form.username,
+          schoolId: form.schoolId,
+          id: form.id,
+          subject: form.subject,
+          photoDataUrl: form.photoDataUrl,
+          password: form.password,
+        })
+      });
+      toast({
+        title: 'Application submitted',
+        description: 'Waiting for admin approval! ✅',
+        variant: 'success',
+      });
+      setTimeout(() => navigate('/signin'), 2000);
+    } catch (err) {
+      toast({
+        title: 'Submission failed',
+        description: 'Failed to submit application. Please try again.',
+        variant: 'destructive',
+      });
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (

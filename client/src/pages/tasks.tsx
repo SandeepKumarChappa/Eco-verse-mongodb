@@ -3,6 +3,7 @@ import { useAuth } from '@/lib/auth';
 import { Button } from '@/components/ui/button';
 import SignupAnimatedBackground from '@/components/SignupAnimatedBackground';
 import { CheckCircle, Clock, AlertCircle, Image, Users, Zap } from 'lucide-react';
+import toast from 'react-hot-toast';
 
 type Task = {
   id: string;
@@ -188,6 +189,7 @@ export default function TasksPage() {
         // If group required, try to create and retry once
         if (/group/i.test(msg) || msg.includes('Create or join a group first')) {
           setError('This task requires a group. Please click "Create Group" first to create or join a group.');
+          toast.error('This task requires a group. Please create or join one first.');
           return;
         } else {
           throw new Error(msg);
@@ -197,9 +199,11 @@ export default function TasksPage() {
       await loadForStudent();
       setStagedPhotos(prev => ({ ...prev, [taskId]: [] }));
       setResubmitOpen(prev => ({ ...prev, [taskId]: false }));
-      setError('✓ Task submitted successfully!');
+      toast.success('Task submitted successfully! 🎉');
     } catch (err: any) {
-      setError(err?.message || 'Submit failed');
+      const msg = err?.message || 'Submit failed';
+      setError(msg);
+      toast.error(msg);
     } finally {
       setLoading(false);
     }
@@ -473,14 +477,24 @@ export default function TasksPage() {
                                       )}
                                       
                                       <Button 
-                                        className="w-full bg-emerald-500/80 hover:bg-emerald-600/80 text-white border border-emerald-400/50 rounded-lg transition-all"
+                                        className="w-full bg-emerald-500/80 hover:bg-emerald-600/80 text-white border border-emerald-400/50 rounded-lg transition-all disabled:opacity-50"
                                         disabled={loading || !(stagedPhotos[task.id]?.length)} 
                                         onClick={(e) => {
                                           e.stopPropagation();
                                           submitProof(task.id, stagedPhotos[task.id] || []);
                                         }}
                                       >
-                                        🚀 {submission ? 'Resubmit' : 'Submit'}
+                                        {loading ? (
+                                          <span className="flex items-center justify-center gap-2">
+                                            <svg className="h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                                              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                            </svg>
+                                            Processing...
+                                          </span>
+                                        ) : (
+                                          `🚀 ${submission ? 'Resubmit' : 'Submit'}`
+                                        )}
                                       </Button>
                                     </div>
                                   ) : (

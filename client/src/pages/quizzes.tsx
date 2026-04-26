@@ -222,7 +222,7 @@ function QuizGrid({ list, onStart }: { list: any[]; onStart: (q:any)=>void }) {
   );
 }
 
-function QuizRunner({ quiz, idx, answers, onSelect, onNext, onPrev, onExit, onSubmit, score, locked, results, reviewOpen, onToggleReview }: {
+function QuizRunner({ quiz, idx, answers, onSelect, onNext, onPrev, onExit, onSubmit, score, locked, results, reviewOpen, onToggleReview, onJump }: {
   quiz: any; idx: number; answers: number[]; onSelect: (choice:number)=>void; onNext: ()=>void; onPrev: ()=>void; onExit: ()=>void; onSubmit: ()=>void; score: number | null; locked: boolean; results: Array<{ index:number; correctIndex:number; selected:number; isCorrect:boolean }> | null; reviewOpen: boolean; onToggleReview: ()=>void; onJump: (questionIndex:number)=>void;
 }) {
   const total = Array.isArray(quiz?.questions) ? quiz.questions.length : 0;

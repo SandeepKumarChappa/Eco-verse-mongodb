@@ -4,6 +4,7 @@ import { useLocation } from "wouter";
 import { useEffect } from "react";
 import { useState } from "react";
 import { motion } from "framer-motion";
+import toast from "react-hot-toast";
 
 export default function SignInPage() {
   const { setSession, role } = useAuth();
@@ -72,6 +73,7 @@ export default function SignInPage() {
       const data = await res.json();
       if (!data.ok) throw new Error("Invalid credentials or not approved yet");
       setSession({ role: data.role, username: data.username });
+      toast.success(`Welcome back, ${data.username}! 🎉`);
       
       // Small delay to ensure session is set
       setTimeout(() => {
@@ -87,11 +89,16 @@ export default function SignInPage() {
         if (st?.status === "pending") {
           setPendingUser(username);
           setError(null);
+          toast.error("Your application is still pending admin approval");
         } else {
-          setError(e?.message || "Login error");
+          const errorMsg = e?.message || "Login error";
+          setError(errorMsg);
+          toast.error(errorMsg);
         }
       } catch {
-        setError(e?.message || "Login error");
+        const errorMsg = e?.message || "Login error";
+        setError(errorMsg);
+        toast.error(errorMsg);
       }
     } finally {
       setLoading(false);

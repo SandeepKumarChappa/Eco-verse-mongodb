@@ -13,11 +13,12 @@ const CATEGORY_THEME: Record<GameDef["category"], string> = {
   climate: "from-[#85b9ff]/25 to-[#52ddd3]/20",
   habits: "from-[#f9b46f]/22 to-[#7bc4ad]/24",
   wildlife: "from-[#5ed6b2]/25 to-[#6dc6ff]/20",
+  environment: "from-[#81c784]/25 to-[#47a488]/20",
   fun: "from-[#a1b5ff]/24 to-[#66d69f]/24",
 };
 
 export default function GamesPage() {
-  const [category, setCategory] = useState<'recycling' | 'climate' | 'habits' | 'wildlife' | 'fun' | 'all'>('all');
+  const [category, setCategory] = useState<'recycling' | 'climate' | 'habits' | 'wildlife' | 'environment' | 'fun' | 'all'>('all');
   const [summary, setSummary] = useState<{ totalGamePoints: number; badges: string[]; monthCompletedCount: number; totalUniqueGames: number } | null>(null);
   const [loadingSummary, setLoadingSummary] = useState(false);
   const { username } = useAuth();
